@@ -1,13 +1,153 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/models.dart';
+import '../../services/supabase_service.dart';
 
 class AppState extends ChangeNotifier {
+  final SupabaseService _service = SupabaseService();
+  bool _loading = true;
+  bool get loading => _loading;
+  final List<Movie> _catalogMovies = [];
+  List<Movie> get catalogMovies => _catalogMovies;
+  final List<Movie> _favoriteMovies = [];
+  List<Movie> get favoriteMovies => List.unmodifiable(_favoriteMovies);
+  final List<Map<String, dynamic>> _userQrCodes = [];
+  List<Map<String, dynamic>> get userQrCodes => List.unmodifiable(_userQrCodes);
+  String? _lastQrCode;
+  String? get lastQrCode => _lastQrCode;
+  String? _pendingQrCode;
+  String? get pendingQrCode => _pendingQrCode;
+
+  String? consumePendingQrCode() {
+    final code = _pendingQrCode;
+    _pendingQrCode = null;
+    return code;
+  }
+  Map<String, dynamic>? _lastCanjeResult;
+  Map<String, dynamic>? get lastCanjeResult => _lastCanjeResult;
+  String? _authError;
+  String? get authError => _authError;
+
+  AppState() {
+    // Production state starts empty. Supabase is the only source for data.
+    _users.clear();
+    _movies.clear();
+    _catalogMovies.clear();
+    _favoriteMovies.clear();
+    _cinemas.clear();
+    _qrCodes.clear();
+    _rewards.clear();
+    _scanHistory.clear();
+    _restoreSession();
+    _loadCatalogs();
+  }
+
+  Future<void> _loadCatalogs() async {
+    _movies.clear();
+    _catalogMovies.clear();
+    _cinemas.clear();
+    _rewards.clear();
+    await Future.wait([
+      _loadMoviesCatalog(),
+      _loadCinemasCatalog(),
+      _loadRewardsCatalog(),
+    ]);
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> _loadMoviesCatalog() async {
+    try {
+      _catalogMovies
+        ..clear()
+        ..addAll(await _service.obtenerPeliculas());
+    } catch (error, stack) {
+      _catalogMovies.clear();
+      debugPrint('[DATA][PELICULAS][ERROR] No se pudieron cargar: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+  }
+
+  Future<void> _loadCinemasCatalog() async {
+    try {
+      _cinemas
+        ..clear()
+        ..addAll(await _service.obtenerCines());
+    } catch (error, stack) {
+      _cinemas.clear();
+      debugPrint('[DATA][CINES][ERROR] No se pudieron cargar: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+  }
+
+  Future<void> _loadRewardsCatalog() async {
+    try {
+      _rewards
+        ..clear()
+        ..addAll(await _service.obtenerPromociones());
+    } catch (error, stack) {
+      _rewards.clear();
+      debugPrint('[DATA][PROMOCIONES][ERROR] No se pudieron cargar: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+  }
+
+  Future<void> _restoreSession() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      try {
+        _currentUser = await _service.asegurarPerfil(
+          id: user.id,
+          email: user.email ?? '',
+        );
+        debugPrint('[AUTH][RESTORE] perfil cargado id=${_currentUser?.id}');
+        await _loadWatchedMovies();
+        await _loadFavorites();
+        await _loadUserQrCodes();
+        notifyListeners();
+      } catch (error) {
+        debugPrint('[AUTH][RESTORE][ERROR] $error');
+      }
+    }
+  }
+
+  Future<void> _loadWatchedMovies() async {
+    final userId = _currentUser?.id;
+    if (userId == null) return;
+    try {
+      _movies
+        ..clear()
+        ..addAll(await _service.obtenerPeliculasVistas(userId));
+      notifyListeners();
+    } catch (error) {
+      debugPrint(
+        '[DATA][VISITAS][ERROR] No se pudo cargar el historial: $error',
+      );
+    }
+  }
+
+  Future<void> _loadFavorites() async {
+    final userId = _currentUser?.id;
+    if (userId == null) return;
+    try {
+      _favoriteMovies
+        ..clear()
+        ..addAll(await _service.obtenerFavoritos(userId));
+      notifyListeners();
+    } catch (error) {
+      _favoriteMovies.clear();
+      debugPrint('[DATA][FAVORITOS][ERROR] No se pudieron cargar: $error');
+    }
+  }
+
   // Theme state
   ThemeMode _themeMode = ThemeMode.dark;
   ThemeMode get themeMode => _themeMode;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    _themeMode = _themeMode == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     notifyListeners();
   }
 
@@ -24,7 +164,8 @@ class AppState extends ChangeNotifier {
       id: 'USR-001',
       name: 'Miguel Ángel',
       email: 'miguel@chineplus.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      avatarUrl:
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       level: 4,
       points: 1250,
       role: 'user',
@@ -35,7 +176,8 @@ class AppState extends ChangeNotifier {
       id: 'USR-002',
       name: 'Sofía Reyes',
       email: 'sofia@gmail.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      avatarUrl:
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
       level: 2,
       points: 450,
       role: 'user',
@@ -46,7 +188,8 @@ class AppState extends ChangeNotifier {
       id: 'USR-003',
       name: 'Carlos Mendoza',
       email: 'carlos.m@yahoo.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150',
+      avatarUrl:
+          'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150',
       level: 1,
       points: 120,
       role: 'user',
@@ -57,7 +200,8 @@ class AppState extends ChangeNotifier {
       id: 'USR-004',
       name: 'Admin ChinePlus',
       email: 'admin@chineplus.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150',
+      avatarUrl:
+          'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150',
       level: 10,
       points: 9999,
       role: 'admin',
@@ -73,70 +217,48 @@ class AppState extends ChangeNotifier {
     Movie(
       id: 'MOV-001',
       title: 'Dune: Part Two',
-      posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300',
+      posterUrl:
+          'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300',
       watchDate: '12/03/2026',
       cinemaName: 'Cinepolis Altaria',
       rating: 5.0,
       genre: 'Ciencia Ficción',
       durationMinutes: 166,
-      description: 'Paul Atreides se une a Chani y a los Fremen mientras busca venganza contra los conspiradores que destruyeron a su familia.',
+      description:
+          'Paul Atreides se une a Chani y a los Fremen mientras busca venganza contra los conspiradores que destruyeron a su familia.',
     ),
     Movie(
       id: 'MOV-002',
       title: 'Oppenheimer',
-      posterUrl: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=300',
+      posterUrl:
+          'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=300',
       watchDate: '20/02/2026',
       cinemaName: 'Cinemark Lindavista',
       rating: 4.5,
       genre: 'Drama / Histórica',
       durationMinutes: 180,
-      description: 'La historia del científico estadounidense J. Robert Oppenheimer y su papel en el desarrollo de la bomba atómica.',
+      description:
+          'La historia del científico estadounidense J. Robert Oppenheimer y su papel en el desarrollo de la bomba atómica.',
     ),
     Movie(
       id: 'MOV-003',
       title: 'Spider-Man: Across the Spider-Verse',
-      posterUrl: 'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=300',
+      posterUrl:
+          'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=300',
       watchDate: '05/01/2026',
       cinemaName: 'Cinepolis Altaria',
       rating: 5.0,
       genre: 'Animación / Acción',
       durationMinutes: 140,
-      description: 'Miles Morales es catapultado a través del Multiverso, donde se encuentra con un equipo de Spider-People encargados de proteger su existencia.',
+      description:
+          'Miles Morales es catapultado a través del Multiverso, donde se encuentra con un equipo de Spider-People encargados de proteger su existencia.',
     ),
   ];
 
   List<Movie> get movies => _movies;
 
-  // Mock cinemas
-  final List<Cinema> _cinemas = [
-    Cinema(
-      id: 'CIN-001',
-      name: 'Cinepolis Altaria',
-      address: 'Centro Comercial Altaria, Col. Trojes de Alonso',
-      schedule: '11:00 AM - 11:30 PM',
-      distance: '1.2 km',
-      latitude: 21.9213,
-      longitude: -102.2915,
-    ),
-    Cinema(
-      id: 'CIN-002',
-      name: 'Cinemark Lindavista',
-      address: 'Av. Lindavista 236, Gustavo A. Madero, CDMX',
-      schedule: '12:00 PM - 11:00 PM',
-      distance: '3.5 km',
-      latitude: 21.9123,
-      longitude: -102.2815,
-    ),
-    Cinema(
-      id: 'CIN-003',
-      name: 'Cine Star Plaza',
-      address: 'Plaza del Cine Local #10, Av. de las Américas',
-      schedule: '1:00 PM - 10:30 PM',
-      distance: '5.8 km',
-      latitude: 21.9023,
-      longitude: -102.3015,
-    ),
-  ];
+  // Production catalog. It is populated exclusively from Supabase.
+  final List<Cinema> _cinemas = [];
 
   List<Cinema> get cinemas => _cinemas;
 
@@ -150,7 +272,8 @@ class AppState extends ChangeNotifier {
       startDate: '10/02/2026',
       expirationDate: '30/06/2026',
       status: 'Activo',
-      description: 'Código QR otorgado en la compra de boletos para Dune: Part Two en preventa.',
+      description:
+          'Código QR otorgado en la compra de boletos para Dune: Part Two en preventa.',
     ),
     QRCode(
       id: 'QR-002',
@@ -160,7 +283,8 @@ class AppState extends ChangeNotifier {
       startDate: '01/03/2026',
       expirationDate: '31/12/2026',
       status: 'Activo',
-      description: 'Escanear el código del poster en el pasillo central del cine.',
+      description:
+          'Escanear el código del poster en el pasillo central del cine.',
     ),
     QRCode(
       id: 'QR-003',
@@ -181,8 +305,10 @@ class AppState extends ChangeNotifier {
     Reward(
       id: 'REW-001',
       name: 'Palomitas Grandes Gratis',
-      description: 'Canjeable por una cubeta de palomitas grandes de mantequilla en dulcería.',
-      imageUrl: 'https://images.unsplash.com/photo-1578244182942-18427f3caca6?w=200',
+      description:
+          'Canjeable por una cubeta de palomitas grandes de mantequilla en dulcería.',
+      imageUrl:
+          'https://images.unsplash.com/photo-1578244182942-18427f3caca6?w=200',
       pointsRequired: 300,
       stock: 45,
       status: 'Activo',
@@ -190,8 +316,10 @@ class AppState extends ChangeNotifier {
     Reward(
       id: 'REW-002',
       name: 'Boleto 2D Tradicional',
-      description: 'Un boleto gratis para cualquier función 2D en salas tradicionales de lunes a domingo.',
-      imageUrl: 'https://images.unsplash.com/photo-1595769816263-9b910be24d5f?w=200',
+      description:
+          'Un boleto gratis para cualquier función 2D en salas tradicionales de lunes a domingo.',
+      imageUrl:
+          'https://images.unsplash.com/photo-1595769816263-9b910be24d5f?w=200',
       pointsRequired: 500,
       stock: 120,
       status: 'Activo',
@@ -200,7 +328,8 @@ class AppState extends ChangeNotifier {
       id: 'REW-003',
       name: 'Combo Pareja CinePlus',
       description: '2 refrescos medianos + 1 palomitas grandes + 1 hot-dog.',
-      imageUrl: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200',
+      imageUrl:
+          'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200',
       pointsRequired: 800,
       stock: 15,
       status: 'Activo',
@@ -209,7 +338,8 @@ class AppState extends ChangeNotifier {
       id: 'REW-004',
       name: 'Vaso Coleccionable Edición Especial',
       description: 'Vaso de acrílico coleccionable de la película del mes.',
-      imageUrl: 'https://images.unsplash.com/photo-1517256064527-09c53b2d0bc6?w=200',
+      imageUrl:
+          'https://images.unsplash.com/photo-1517256064527-09c53b2d0bc6?w=200',
       pointsRequired: 400,
       stock: 0,
       status: 'Inactivo',
@@ -250,65 +380,132 @@ class AppState extends ChangeNotifier {
 
   // Login handler
   bool login(String email, String password, String selectedRole) {
-    // Basic verification for mock
-    AppUser? foundUser;
-    for (var u in _users) {
-      if (u.email.toLowerCase() == email.trim().toLowerCase() && u.role == selectedRole) {
-        foundUser = u;
-        break;
-      }
-    }
+    // This legacy synchronous API no longer authenticates mock users.
+    return false;
+  }
 
-    if (foundUser != null) {
-      if (foundUser.status == 'Inactivo') {
+  Future<bool> loginWithSupabase(
+    String email,
+    String password,
+    String selectedRole,
+  ) async {
+    _authError = null;
+    try {
+      final user = await _service.iniciarSesion(email.trim(), password);
+      if ((selectedRole == 'admin') != (user.role == 'admin') ||
+          user.status != 'Activo') {
+        _authError = 'Perfil rechazado: rol o estado no coincide';
+        debugPrint('[AUTH][6][ERROR] $_authError');
         return false;
       }
-      _currentUser = foundUser;
+      _currentUser = user;
+      await _loadWatchedMovies();
+      await _loadFavorites();
+      await _loadUserQrCodes();
       notifyListeners();
       return true;
+    } catch (error) {
+      _authError = error.toString();
+      debugPrint('[AUTH][6][ERROR] $_authError');
+      return false;
     }
-
-    // Fallback: Create mock user if logging in first time to make testing super fluid
-    if (email.isNotEmpty && password.length >= 4) {
-      _currentUser = AppUser(
-        id: selectedRole == 'admin' ? 'ADM-999' : 'USR-999',
-        name: email.split('@')[0],
-        email: email,
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        level: 1,
-        points: selectedRole == 'admin' ? 9999 : 200,
-        role: selectedRole,
-        status: 'Activo',
-        registrationDate: '26/06/2026',
-      );
-      // Add to list if not present
-      _users.add(_currentUser!);
-      notifyListeners();
-      return true;
-    }
-    return false;
   }
 
   void logout() {
     _currentUser = null;
+    _favoriteMovies.clear();
+    _service.cerrarSesion().catchError((_) {});
     notifyListeners();
   }
 
-  void register(String name, String email, String password) {
-    final newUser = AppUser(
-      id: 'USR-${_users.length + 1}'.padRight(7, '0'),
-      name: name,
-      email: email,
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      level: 1,
-      points: 150, // Starting bonus
-      role: 'user',
-      status: 'Activo',
-      registrationDate: '26/06/2026',
-    );
-    _users.add(newUser);
-    _currentUser = newUser;
+  bool isFavorite(String movieId) =>
+      _favoriteMovies.any((movie) => movie.catalogMovieId == movieId);
+
+  Future<void> toggleFavorite(Movie movie) async {
+    if (!movie.isCatalogMovie) {
+      throw StateError('Las películas personales no pueden marcarse como favoritas');
+    }
+    final catalogMovieId = movie.catalogMovieId!;
+    final wasFavorite = isFavorite(catalogMovieId);
+    if (wasFavorite) {
+      await _service.eliminarFavorito(catalogMovieId);
+      _favoriteMovies.removeWhere((favorite) => favorite.catalogMovieId == catalogMovieId);
+    } else {
+      await _service.guardarFavorito(catalogMovieId);
+      _favoriteMovies.insert(0, movie);
+    }
     notifyListeners();
+  }
+
+  Future<bool> registerWithSupabase(
+    String name,
+    String email,
+    String password,
+  ) async {
+    _authError = null;
+    try {
+      _currentUser = await _service.registrar(
+        name.trim(),
+        email.trim(),
+        password,
+      );
+      debugPrint(
+        '[AUTH][6] registro completado, preparando navegación user=${_currentUser?.id}',
+      );
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _authError = error.toString();
+      debugPrint('[AUTH][6][ERROR] $_authError');
+      return false;
+    }
+  }
+
+  Future<bool> redeemReward(Reward reward) async {
+    try {
+      final qr = await _service.canjear(reward);
+      debugPrint('[DATA][CANJES][APPSTATE] Resultado: $qr');
+      debugPrint('[DATA][CANJES][APPSTATE] codigo: ${qr['codigo']}');
+      _lastCanjeResult = {
+        'canje_id': qr['canje_id'],
+        'qr_id': qr['qr_id'],
+        'codigo': qr['codigo'],
+        'puntos_utilizados': qr['puntos_utilizados'],
+        'saldo_actual': qr['saldo_actual'],
+        'existencias_restantes': qr['existencias_restantes'],
+      };
+      _lastQrCode = _lastCanjeResult!['codigo']?.toString();
+      _pendingQrCode = _lastQrCode;
+      debugPrint('[DATA][CANJES][APPSTATE] lastQrCode: $_lastQrCode');
+      if (_currentUser != null) {
+        final refreshedProfile = await _service.obtenerPerfil(_currentUser!.id);
+        if (refreshedProfile != null) _currentUser = refreshedProfile;
+      }
+      await _reloadRewards();
+      await _loadUserQrCodes();
+      notifyListeners();
+      return true;
+    } catch (error) {
+      debugPrint('[DATA][CANJES][ERROR] No se pudo completar el canje: $error');
+      return false;
+    }
+  }
+
+  Future<void> _loadUserQrCodes() async {
+    final userId = _currentUser?.id;
+    if (userId == null) return;
+    try {
+      _userQrCodes
+        ..clear()
+        ..addAll(await _service.obtenerCodigosQr(userId));
+      notifyListeners();
+    } catch (error) {
+      debugPrint('[DATA][QR][ERROR] No se pudieron cargar los QR: $error');
+    }
+  }
+
+  void register(String name, String email, String password) {
+    debugPrint('[AUTH] register() legacy ignorado: usa Supabase Auth.');
   }
 
   // User Actions: Tracker Management
@@ -317,64 +514,109 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> registrarPeliculaVista({
+    String? peliculaId,
+    required String cineId,
+    required DateTime fechaVisita,
+    String? tituloPersonal,
+    String? generoPersonal,
+    int? duracionMinutosPersonal,
+    double? calificacionPersonal,
+    String? comentarioPersonal,
+  }) async {
+    final usuarioId = _currentUser?.id;
+    if (usuarioId == null) return false;
+    try {
+      await _service.registrarVisita(
+        peliculaId: peliculaId,
+        cineId: cineId,
+        fechaVisita: fechaVisita,
+        tituloPersonal: tituloPersonal,
+        generoPersonal: generoPersonal,
+        duracionMinutosPersonal: duracionMinutosPersonal,
+        calificacionPersonal: calificacionPersonal,
+        comentarioPersonal: comentarioPersonal,
+      );
+      await _loadWatchedMovies();
+      final refreshedProfile = await _service.obtenerPerfil(usuarioId);
+      if (refreshedProfile != null) {
+        _currentUser = refreshedProfile;
+      }
+      notifyListeners();
+      return true;
+    } catch (error) {
+      debugPrint(
+        '[DATA][VISITAS][ERROR] No se pudo registrar la visita: $error',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> actualizarPeliculaVista({
+    required String visitaId,
+    required String cineId,
+    required DateTime fechaVisita,
+    String? tituloPersonal,
+    String? generoPersonal,
+    int? duracionMinutosPersonal,
+    double? calificacionPersonal,
+    String? comentarioPersonal,
+  }) async {
+    final usuarioId = _currentUser?.id;
+    if (usuarioId == null) return false;
+    try {
+      await _service.actualizarVisita(
+        visitaId: visitaId,
+        usuarioId: usuarioId,
+        cineId: cineId,
+        fechaVisita: fechaVisita,
+        tituloPersonal: tituloPersonal,
+        generoPersonal: generoPersonal,
+        duracionMinutosPersonal: duracionMinutosPersonal,
+        calificacionPersonal: calificacionPersonal,
+        comentarioPersonal: comentarioPersonal,
+      );
+      await _loadWatchedMovies();
+      return true;
+    } catch (error) {
+      debugPrint('[DATA][VISITAS][ERROR] No se pudo actualizar: $error');
+      return false;
+    }
+  }
+
+  Future<bool> eliminarPeliculaVista(String visitaId) async {
+    final usuarioId = _currentUser?.id;
+    if (usuarioId == null) return false;
+    try {
+      await _service.eliminarVisita(visitaId: visitaId, usuarioId: usuarioId);
+      await _loadWatchedMovies();
+      return true;
+    } catch (error) {
+      debugPrint('[DATA][VISITAS][ERROR] No se pudo eliminar: $error');
+      return false;
+    }
+  }
+
   void deleteMovie(String movieId) {
     _movies.removeWhere((m) => m.id == movieId);
     notifyListeners();
   }
 
-  // QR Scanning Simulation Action
-  ScanHistory scanQRCodeSimulation(String title, int pointsValue) {
-    final curUserId = _currentUser?.id ?? 'INV-USER';
-
-    // Check if user has already scanned this QR successfully
-    final hasAlreadyScanned = pointsValue > 0 &&
-        _scanHistory.any((scan) =>
-            scan.userId == curUserId &&
-            scan.place == title &&
-            scan.status == 'Completado');
-
-    final ScanHistory newScan;
-    if (hasAlreadyScanned) {
-      newScan = ScanHistory(
-        id: 'SCAN-${_scanHistory.length + 1}'.padRight(8, '0'),
-        userId: curUserId,
-        date: '26/06/2026',
-        place: title,
-        points: 0,
-        status: 'Duplicado',
-      );
-    } else {
-      newScan = ScanHistory(
-        id: 'SCAN-${_scanHistory.length + 1}'.padRight(8, '0'),
-        userId: curUserId,
-        date: '26/06/2026',
-        place: title,
-        points: pointsValue,
-        status: pointsValue > 0 ? 'Completado' : 'Fallido',
-      );
+  Future<Map<String, dynamic>> registrarUsoQr({
+    required String codigo,
+    required String cineId,
+  }) async {
+    final result = await _service.registrarUsoQrConPuntos(
+      codigo: codigo,
+      cineId: cineId,
+    );
+    final userId = _currentUser?.id;
+    if (userId != null) {
+      final refreshedProfile = await _service.obtenerPerfil(userId);
+      if (refreshedProfile != null) _currentUser = refreshedProfile;
     }
-
-    _scanHistory.insert(0, newScan);
-
-    if (newScan.status == 'Completado' && _currentUser != null) {
-      // Award points
-      final updatedPoints = _currentUser!.points + pointsValue;
-      // Recalculate level based on points (e.g. 500 points per level)
-      final newLevel = (updatedPoints ~/ 500) + 1;
-      _currentUser = _currentUser!.copyWith(
-        points: updatedPoints,
-        level: newLevel,
-      );
-
-      // Also update in user list
-      final index = _users.indexWhere((u) => u.id == _currentUser!.id);
-      if (index != -1) {
-        _users[index] = _currentUser!;
-      }
-    }
-
     notifyListeners();
-    return newScan;
+    return result;
   }
 
   // Admin Actions: User Management
@@ -408,18 +650,25 @@ class AppState extends ChangeNotifier {
   }
 
   // Admin Actions: Rewards CRUD
-  void saveReward(Reward reward) {
-    final index = _rewards.indexWhere((r) => r.id == reward.id);
-    if (index != -1) {
-      _rewards[index] = reward;
+  Future<void> saveReward(Reward reward) async {
+    if (_rewards.any((r) => r.id == reward.id)) {
+      await _service.actualizarPromocion(reward);
     } else {
-      _rewards.add(reward);
+      await _service.crearPromocion(reward);
     }
-    notifyListeners();
+    await _reloadRewards();
   }
 
-  void deleteReward(String rewardId) {
-    _rewards.removeWhere((r) => r.id == rewardId);
+  Future<void> deleteReward(String rewardId) async {
+    await _service.eliminarPromocion(rewardId);
+    await _reloadRewards();
+  }
+
+  Future<void> _reloadRewards() async {
+    final rewards = await _service.obtenerPromociones();
+    _rewards
+      ..clear()
+      ..addAll(rewards);
     notifyListeners();
   }
 

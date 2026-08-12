@@ -249,7 +249,7 @@ class _AdminDashboardSection extends StatelessWidget {
                 _buildStatMetric(
                   context,
                   title: 'Premios Stock',
-                  value: '${appState.rewards.fold(0, (sum, r) => sum + r.stock)}',
+                  value: '${appState.rewards.fold<int>(0, (sum, r) => sum + (r.stock ?? 0))}',
                   icon: Icons.card_giftcard,
                   color: AppTheme.goldAccent,
                 ),
@@ -583,9 +583,17 @@ class _AdminRewardsSection extends StatelessWidget {
                   backgroundColor: Colors.black.withValues(alpha: 0.7),
                   child: IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                    onPressed: () {
-                      appState.deleteReward(reward.id);
-                      showAppSnackbar(context, message: 'Recompensa eliminada.');
+                    onPressed: () async {
+                      try {
+                        await appState.deleteReward(reward.id);
+                        if (context.mounted) {
+                          showAppSnackbar(context, message: 'Promoción eliminada.');
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          showAppSnackbar(context, message: 'Error de Supabase: $error');
+                        }
+                      }
                     },
                   ),
                 ),
@@ -603,7 +611,9 @@ class _AdminRewardsSection extends StatelessWidget {
     final descController = TextEditingController(text: reward?.description ?? '');
     final pointsController = TextEditingController(text: reward != null ? '${reward.pointsRequired}' : '300');
     final stockController = TextEditingController(text: reward != null ? '${reward.stock}' : '50');
-    String status = reward?.status ?? 'Activo';
+    String status = reward?.status == 'activa' ? 'Activo' :
+        reward?.status == 'inactiva' ? 'Inactivo' : (reward == null ? 'Activo' : 'Inactivo');
+    final selectedCinemaIds = <String>{...?reward?.cinemaIds};
 
     showDialog(
       context: context,
@@ -670,6 +680,37 @@ class _AdminRewardsSection extends StatelessWidget {
                       }
                     },
                   ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Cines donde aplica',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  if (appState.cinemas.isEmpty)
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('No hay cines disponibles.'),
+                    )
+                  else
+                    ...appState.cinemas.map(
+                      (cinema) => CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(cinema.name),
+                        value: selectedCinemaIds.contains(cinema.id),
+                        onChanged: (checked) {
+                          setDialogState(() {
+                            if (checked == true) {
+                              selectedCinemaIds.add(cinema.id);
+                            } else {
+                              selectedCinemaIds.remove(cinema.id);
+                            }
+                          });
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -687,17 +728,28 @@ class _AdminRewardsSection extends StatelessWidget {
                     id: reward?.id ?? 'REW-${DateTime.now().millisecondsSinceEpoch}',
                     name: nameController.text,
                     description: descController.text,
-                    imageUrl: reward?.imageUrl ?? 'https://images.unsplash.com/photo-1578244182942-18427f3caca6?w=200',
+                    imageUrl: reward?.imageUrl ?? '',
                     pointsRequired: int.parse(pointsController.text),
-                    stock: int.parse(stockController.text),
-                    status: status,
+                    stock: int.tryParse(stockController.text),
+                    status: status.toLowerCase() == 'activo' ? 'activa' : 'inactiva',
+                    cinemaIds: selectedCinemaIds.toList(),
                   );
-                  appState.saveReward(newReward);
-                  Navigator.pop(context);
-                  showAppSnackbar(
-                    context,
-                    message: reward == null ? 'Recompensa creada con éxito.' : 'Recompensa editada con éxito.',
-                  );
+                  () async {
+                    try {
+                      await appState.saveReward(newReward);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        showAppSnackbar(
+                          context,
+                          message: reward == null ? 'Promoción creada con éxito.' : 'Promoción editada con éxito.',
+                        );
+                      }
+                    } catch (error) {
+                      if (context.mounted) {
+                        showAppSnackbar(context, message: 'Error de Supabase: $error');
+                      }
+                    }
+                  }();
                 }
               },
               child: const Text('Guardar'),

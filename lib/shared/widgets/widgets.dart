@@ -319,12 +319,16 @@ class MovieCard extends StatelessWidget {
   final Movie movie;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final bool isFavorite;
+  final VoidCallback? onFavorite;
 
   const MovieCard({
     super.key,
     required this.movie,
     required this.onTap,
     this.onDelete,
+    this.isFavorite = false,
+    this.onFavorite,
   });
 
   @override
@@ -376,6 +380,17 @@ class MovieCard extends StatelessWidget {
                         IconButton(
                           icon: Icon(Icons.delete_outline, color: colorScheme.error, size: 20),
                           onPressed: onDelete,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      if (onFavorite != null)
+                        IconButton(
+                          icon: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                            color: isFavorite ? Colors.redAccent : colorScheme.onSurface,
+                            size: 20,
+                          ),
+                          onPressed: onFavorite,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -534,10 +549,10 @@ class RewardCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Stock: ${reward.stock}',
+                      'Stock: ${reward.stock ?? 'No especificado'}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: reward.stock > 5 ? colorScheme.onSurface.withValues(alpha: 0.6) : Colors.redAccent,
+                        color: reward.stock == null || reward.stock! > 5 ? colorScheme.onSurface.withValues(alpha: 0.6) : Colors.redAccent,
                       ),
                     ),
                     Icon(

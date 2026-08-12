@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/theme.dart';
@@ -14,6 +15,10 @@ class QRScannerScreen extends StatefulWidget {
 class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProviderStateMixin {
   late AnimationController _laserController;
   late Animation<double> _laserAnimation;
+  String? _selectedCinemaId;
+  bool _processing = false;
+  bool _cameraOpen = false;
+  String? _scanError;
 
   @override
   void initState() {
@@ -32,96 +37,42 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
     super.dispose();
   }
 
-  void _triggerMockScan(BuildContext context, AppState appState) {
-    // Show a modal sheet to select which mock code to scan
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        final activeQRs = appState.qrCodes.where((q) => q.status == 'Activo').toList();
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Simulador de Escáner QR',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Selecciona qué código promocional deseas simular escanear:',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              if (activeQRs.isEmpty)
-                const Center(child: Text('No hay códigos QR activos para escanear.'))
-              else
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: activeQRs.length + 1, // list + 1 invalid code option
-                    itemBuilder: (context, index) {
-                      if (index == activeQRs.length) {
-                        return ListTile(
-                          leading: const Icon(Icons.error_outline, color: Colors.redAccent),
-                          title: const Text('Código QR Inválido / Expirado'),
-                          subtitle: const Text('Simula un error de lectura'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            appState.scanQRCodeSimulation('Código Inválido', 0);
-                            showAppSnackbar(
-                              context,
-                              message: 'Error al escanear código QR.',
-                              isError: true,
-                            );
-                          },
-                        );
-                      }
-
-                      final qr = activeQRs[index];
-                      return ListTile(
-                        leading: const Icon(Icons.qr_code, color: AppTheme.jadeGreen),
-                        title: Text(qr.name),
-                        subtitle: Text('${qr.type} - Otorga ${qr.points} pts'),
-                        trailing: Text(
-                          '+${qr.points} pts',
-                          style: const TextStyle(
-                            color: AppTheme.goldAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          final result = appState.scanQRCodeSimulation(qr.name, qr.points);
-                          if (result.status == 'Completado') {
-                            showAppSnackbar(
-                              context,
-                              message: '¡Escaneo exitoso! Obtuviste +${qr.points} puntos.',
-                            );
-                          } else if (result.status == 'Duplicado') {
-                            showAppSnackbar(
-                              context,
-                              message: 'Este código QR ya fue canjeado por ti.',
-                              isError: true,
-                            );
-                          } else {
-                            showAppSnackbar(
-                              context,
-                              message: 'Error al escanear código QR.',
-                              isError: true,
-                            );
-                          }
-                        },
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
+  Future<void> _handleDetection(
+    BuildContext context,
+    AppState appState,
+    BarcodeCapture capture,
+  ) async {
+    if (_processing || _selectedCinemaId == null) return;
+    final codigo = capture.barcodes
+        .map((barcode) => barcode.rawValue)
+        .whereType<String>()
+        .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
+    if (codigo.isEmpty) return;
+    setState(() {
+      _processing = true;
+      _scanError = null;
+    });
+    try {
+      final result = await appState.registrarUsoQr(
+        codigo: codigo.trim(),
+        cineId: _selectedCinemaId!,
+      );
+      if (!mounted) return;
+      final points = result['puntos_obtenidos'] ?? result['puntos'] ?? 50;
+      final balance = result['saldo_actual'] ?? result['nuevo_saldo'] ?? result['saldo'] ?? appState.currentUser?.points;
+      setState(() => _cameraOpen = false);
+      showAppSnackbar(
+        context,
+        message: 'QR registrado: +$points puntos. Saldo: $balance puntos.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _scanError = error.toString();
+        _processing = false;
+      });
+      showAppSnackbar(context, message: _scanError!, isError: true);
+    }
   }
 
   @override
@@ -143,15 +94,53 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
             children: [
               const SizedBox(height: 16),
 
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCinemaId,
+                decoration: const InputDecoration(
+                  labelText: 'Cine donde estás realizando el escaneo',
+                  border: OutlineInputBorder(),
+                ),
+                hint: const Text('Selecciona un cine'),
+                items: appState.cinemas
+                    .map((cinema) => DropdownMenuItem<String>(
+                          value: cinema.id,
+                          child: Text(cinema.name),
+                        ))
+                    .toList(),
+                onChanged: _processing
+                    ? null
+                    : (value) => setState(() {
+                          _selectedCinemaId = value;
+                          _cameraOpen = false;
+                          _scanError = null;
+                        }),
+              ),
+              const SizedBox(height: 16),
+
               // Viewfinder camera simulator box
-              Expanded(
-                flex: 4,
-                child: PremiumCard(
+                Expanded(
+                  flex: 4,
+                  child: PremiumCard(
                   borderColor: AppTheme.jadeGreen.withValues(alpha: 0.4),
-                  child: Stack(
+                    child: _cameraOpen && _selectedCinemaId != null
+                        ? Stack(
+                            children: [
+                              MobileScanner(
+                                onDetect: (capture) =>
+                                    _handleDetection(context, appState, capture),
+                              ),
+                              if (_processing)
+                                Container(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  alignment: Alignment.center,
+                                  child: const CircularProgressIndicator(),
+                                ),
+                            ],
+                          )
+                        : Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Dark tint background mimicking camera aperture
+                      // Camera preview placeholder until the user starts scanning.
                       Container(color: Colors.black.withValues(alpha: 0.85)),
 
                       // Scanning camera guideline frame
@@ -239,7 +228,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
               AppButton(
                 text: 'Escanear Código QR',
                 icon: Icons.camera_alt_outlined,
-                onPressed: () => _triggerMockScan(context, appState),
+                onPressed: () {
+                  if (_selectedCinemaId == null || _processing) return;
+                  setState(() {
+                          _cameraOpen = true;
+                          _scanError = null;
+                        });
+                },
               ),
 
               const SizedBox(height: 24),

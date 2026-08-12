@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'config/supabase_config.dart';
 import 'core/state/app_state.dart';
 import 'core/theme/theme.dart';
 import 'core/routes/app_router.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await SupabaseConfig.inicializar();
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppState(),
