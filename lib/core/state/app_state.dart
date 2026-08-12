@@ -495,9 +495,11 @@ class AppState extends ChangeNotifier {
     final userId = _currentUser?.id;
     if (userId == null) return;
     try {
+      final qrCodes = await _service.obtenerCodigosQr(userId);
+      debugPrint('[DATA][QR][APPSTATE] cargando ${qrCodes.length} códigos');
       _userQrCodes
         ..clear()
-        ..addAll(await _service.obtenerCodigosQr(userId));
+        ..addAll(qrCodes);
       notifyListeners();
     } catch (error) {
       debugPrint('[DATA][QR][ERROR] No se pudieron cargar los QR: $error');

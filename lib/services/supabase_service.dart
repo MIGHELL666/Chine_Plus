@@ -359,10 +359,24 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> obtenerCodigosQr(String usuarioId) async {
     final rows = await _supabase
-        .from('codigos_qr')
-        .select('id,codigo,estado,fecha_generacion,fecha_uso,canjes!inner(usuario_id,promociones(nombre))')
-        .eq('canjes.usuario_id', usuarioId)
-        .order('fecha_generacion', ascending: false);
-    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+        .from('canjes')
+        .select(
+          'id,usuario_id,codigos_qr(id,codigo,estado,fecha_generacion,fecha_uso)',
+        )
+        .eq('usuario_id', usuarioId)
+        .order('fecha_canje', ascending: false);
+    final qrCodes = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final qr = row['codigos_qr'];
+      if (qr is Map) {
+        qrCodes.add(Map<String, dynamic>.from(qr));
+      } else if (qr is List) {
+        for (final item in qr) {
+          if (item is Map) qrCodes.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+    debugPrint('[DATA][QR] códigos encontrados para $usuarioId: ${qrCodes.length}');
+    return qrCodes;
   }
 }

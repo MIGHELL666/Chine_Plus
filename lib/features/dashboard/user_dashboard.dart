@@ -17,6 +17,7 @@ class UserDashboardScreen extends StatefulWidget {
 
 class _UserDashboardScreenState extends State<UserDashboardScreen> {
   AppState? _listenedAppState;
+  bool _qrDialogScheduled = false;
 
   @override
   void initState() {
@@ -50,24 +51,32 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
       debugPrint('[DATA][CANJES][UI] no hay QR pendiente');
       return;
     }
-    final consumedCode = _listenedAppState!.consumePendingQrCode();
-    debugPrint('[DATA][CANJES][UI] QR consumido: $consumedCode');
-    if (consumedCode == null || consumedCode.isEmpty) {
-      debugPrint('[DATA][CANJES][UI] se cancela: QR consumido vacío');
+    if (_qrDialogScheduled) {
+      debugPrint('[DATA][CANJES][UI] ya existe un QR programado; se evita duplicado');
       return;
     }
-    debugPrint('[DATA][CANJES][UI] QR pendiente detectado por estado: $consumedCode');
+    debugPrint('[DATA][CANJES][UI] QR pendiente detectado por estado: $code');
+    _qrDialogScheduled = true;
     debugPrint('[DATA][CANJES][UI] programando addPostFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('[DATA][CANJES][UI] addPostFrameCallback ejecutado');
       debugPrint('[DATA][CANJES][UI] mounted dentro del callback: $mounted');
       if (!mounted) {
         debugPrint('[DATA][CANJES][UI] Se cancela: UserDashboard desmontado');
+        _qrDialogScheduled = false;
+        return;
+      }
+      final consumedCode = _listenedAppState?.consumePendingQrCode();
+      debugPrint('[DATA][CANJES][UI] QR consumido: $consumedCode');
+      if (consumedCode == null || consumedCode.isEmpty) {
+        debugPrint('[DATA][CANJES][UI] se cancela: QR consumido vacío');
+        _qrDialogScheduled = false;
         return;
       }
       debugPrint('[DATA][CANJES][UI] abriendo QR con: $consumedCode');
       _showGeneratedQrDialog(context, consumedCode);
       debugPrint('[DATA][CANJES][UI] llamada a _showGeneratedQrDialog completada');
+      _qrDialogScheduled = false;
     });
   }
 
@@ -637,32 +646,39 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
       context: context,
       builder: (dialogContext) {
         debugPrint('[DATA][CANJES][QR_DIALOG] builder ejecutado');
-        return AlertDialog(
-          title: const Text('¡Canje realizado!'),
-          content: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 240),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Builder(
-                    builder: (context) {
-                      debugPrint('[DATA][CANJES][QR_DIALOG] construyendo QrImageView con: $code');
-                      return QrImageView(data: code, size: 220);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  SelectableText(code),
-                ],
+        return Dialog(
+          child: SizedBox(
+            width: 280,
+            height: 380,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const Text(
+                      '¡Canje realizado!',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Builder(
+                      builder: (context) {
+                        debugPrint('[DATA][CANJES][QR_DIALOG] construyendo QrImageView con: $code');
+                        return QrImageView(data: code, size: 220);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(code, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cerrar'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cerrar'),
-            ),
-          ],
         );
       },
     );

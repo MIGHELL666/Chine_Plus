@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'config/supabase_config.dart';
 import 'core/state/app_state.dart';
@@ -18,13 +19,26 @@ Future<void> main() async {
   );
 }
 
-class ChinePlusApp extends StatelessWidget {
+class ChinePlusApp extends StatefulWidget {
   const ChinePlusApp({super.key});
+
+  @override
+  State<ChinePlusApp> createState() => _ChinePlusAppState();
+}
+
+class _ChinePlusAppState extends State<ChinePlusApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    final appState = Provider.of<AppState>(context, listen: false);
+    _router = AppRouter.createRouter(appState);
+  }
 
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
-    final router = AppRouter.createRouter(appState);
 
     return MaterialApp.router(
       title: 'Chine Plus',
@@ -32,7 +46,7 @@ class ChinePlusApp extends StatelessWidget {
       themeMode: appState.themeMode,
       theme: AppTheme.getLightTheme(),
       darkTheme: AppTheme.getDarkTheme(),
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }

@@ -19,24 +19,30 @@ class UserShellScreen extends StatefulWidget {
 
 class _UserShellScreenState extends State<UserShellScreen> {
   int _currentIndex = 2; // Default is Dashboard (Center - index 2)
+  late final List<Widget> _screens;
 
   @override
-  Widget build(BuildContext context) {
-    final List<Widget> screens = [
+  void initState() {
+    super.initState();
+    _screens = [
       const TrackerScreen(),
       const MapScreen(),
       UserDashboardScreen(onTabChange: (index) {
+        if (!mounted) return;
         setState(() {
           _currentIndex = index;
         });
       }),
       const QRScannerScreen(),
     ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: screens,
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
