@@ -9,6 +9,8 @@ class AppState extends ChangeNotifier {
   bool get loading => _loading;
   final List<Movie> _catalogMovies = [];
   List<Movie> get catalogMovies => _catalogMovies;
+  final List<Movie> _adminMovies = [];
+  List<Movie> get adminMovies => List.unmodifiable(_adminMovies);
   final List<Movie> _favoriteMovies = [];
   List<Movie> get favoriteMovies => List.unmodifiable(_favoriteMovies);
   final List<Map<String, dynamic>> _userQrCodes = [];
@@ -104,6 +106,9 @@ class AppState extends ChangeNotifier {
         await _loadWatchedMovies();
         await _loadFavorites();
         await _loadUserQrCodes();
+        if (_currentUser?.role == 'admin') await _loadAdminUsers();
+        if (_currentUser?.role == 'admin') await cargarPeliculasAdmin();
+        if (_currentUser?.role == 'admin') await cargarCinesAdmin();
         notifyListeners();
       } catch (error) {
         debugPrint('[AUTH][RESTORE][ERROR] $error');
@@ -138,6 +143,71 @@ class AppState extends ChangeNotifier {
       _favoriteMovies.clear();
       debugPrint('[DATA][FAVORITOS][ERROR] No se pudieron cargar: $error');
     }
+  }
+
+  Future<void> _loadAdminUsers() async {
+    try {
+      _users
+        ..clear()
+        ..addAll(await _service.obtenerUsuarios());
+      notifyListeners();
+    } catch (error, stack) {
+      debugPrint('[DATA][PERFILES][ERROR] No se pudieron cargar usuarios: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+  }
+
+  Future<void> cargarPeliculasAdmin() async {
+    _adminMovies
+      ..clear()
+      ..addAll(await _service.obtenerPeliculasAdmin());
+    notifyListeners();
+  }
+
+  Future<void> crearPeliculaAdmin({
+    required String titulo,
+    String? posterUrl,
+    String? genero,
+    int? duracionMinutos,
+    String? descripcion,
+    DateTime? fechaEstreno,
+    String estado = 'activo',
+  }) async {
+    await _service.crearPelicula(titulo: titulo, posterUrl: posterUrl, genero: genero,
+      duracionMinutos: duracionMinutos, descripcion: descripcion,
+      fechaEstreno: fechaEstreno, estado: estado);
+    await cargarPeliculasAdmin();
+  }
+
+  Future<void> actualizarPeliculaAdmin(Movie movie) async {
+    await _service.actualizarPelicula(movie);
+    await cargarPeliculasAdmin();
+  }
+
+  Future<void> actualizarEstadoPeliculaAdmin(Movie movie) async {
+    final next = movie.status == 'activo' ? 'inactivo' : 'activo';
+    await _service.actualizarEstadoPelicula(movie.id, next);
+    await cargarPeliculasAdmin();
+  }
+
+  Future<void> cargarCinesAdmin() async {
+    _adminCinemas..clear()..addAll(await _service.obtenerCinesAdmin());
+    notifyListeners();
+  }
+
+  Future<void> crearCineAdmin({required String googlePlaceId, required String nombre, String? direccion, double? latitud, double? longitud}) async {
+    await _service.crearCine(googlePlaceId: googlePlaceId, nombre: nombre, direccion: direccion, latitud: latitud, longitud: longitud);
+    await cargarCinesAdmin();
+  }
+
+  Future<void> actualizarCineAdmin(Cinema cine) async {
+    await _service.actualizarCine(cine);
+    await cargarCinesAdmin();
+  }
+
+  Future<void> actualizarEstadoCineAdmin(Cinema cine) async {
+    await _service.actualizarEstadoCine(cine.id, cine.status == 'activo' ? 'inactivo' : 'activo');
+    await cargarCinesAdmin();
   }
 
   // Theme state
@@ -259,6 +329,8 @@ class AppState extends ChangeNotifier {
 
   // Production catalog. It is populated exclusively from Supabase.
   final List<Cinema> _cinemas = [];
+  final List<Cinema> _adminCinemas = [];
+  List<Cinema> get adminCinemas => List.unmodifiable(_adminCinemas);
 
   List<Cinema> get cinemas => _cinemas;
 
@@ -402,6 +474,11 @@ class AppState extends ChangeNotifier {
       await _loadWatchedMovies();
       await _loadFavorites();
       await _loadUserQrCodes();
+      if (_currentUser?.role == 'admin') {
+        await _loadAdminUsers();
+        await cargarPeliculasAdmin();
+        await cargarCinesAdmin();
+      }
       notifyListeners();
       return true;
     } catch (error) {
@@ -622,10 +699,12 @@ class AppState extends ChangeNotifier {
   }
 
   // Admin Actions: User Management
-  void updateUserStatus(String userId, String status) {
+  Future<void> updateUserStatus(String userId, String status) async {
     final index = _users.indexWhere((u) => u.id == userId);
     if (index != -1) {
-      _users[index] = _users[index].copyWith(status: status);
+      _users[index] = await _service.actualizarPerfilAdmin(
+        _users[index].copyWith(status: status),
+      );
       if (_currentUser?.id == userId) {
         _currentUser = _users[index];
       }
@@ -633,20 +712,25 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void deleteUser(String userId) {
+  Future<void> deleteUser(String userId) async {
+    if (_currentUser?.id == userId) {
+      throw StateError('No puedes eliminar el perfil administrador en sesión');
+    }
+    await _service.eliminarPerfilAdmin(userId);
     _users.removeWhere((u) => u.id == userId);
     notifyListeners();
   }
 
-  void saveUser(AppUser user) {
+  Future<void> saveUser(AppUser user) async {
+    final savedUser = await _service.actualizarPerfilAdmin(user);
     final index = _users.indexWhere((u) => u.id == user.id);
     if (index != -1) {
-      _users[index] = user;
+      _users[index] = savedUser;
       if (_currentUser?.id == user.id) {
         _currentUser = user;
       }
     } else {
-      _users.add(user);
+      _users.add(savedUser);
     }
     notifyListeners();
   }

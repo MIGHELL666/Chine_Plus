@@ -21,8 +21,16 @@ class _TrackerScreenState extends State<TrackerScreen> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
 
-    // Filter movies
-    final filteredMovies = appState.movies.where((movie) {
+    // The list shows the global active catalog plus the user's personal history.
+    // History remains in appState.movies; catalog movies remain global.
+    final visibleMovies = <Movie>[...appState.catalogMovies];
+    for (final watchedMovie in appState.movies) {
+      if (!visibleMovies.any((movie) => movie.id == watchedMovie.id && movie.isCatalogMovie == watchedMovie.isCatalogMovie)) {
+        visibleMovies.add(watchedMovie);
+      }
+    }
+
+    final filteredMovies = visibleMovies.where((movie) {
       final matchesSearch =
           movie.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           movie.cinemaName.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -55,8 +63,8 @@ class _TrackerScreenState extends State<TrackerScreen> {
       }
     });
 
-    // Unique list of genres in the database
-    final allGenres = ['Todos', ...appState.movies.map((m) => m.genre).toSet()];
+    // Unique genres from the catalog and personal history.
+    final allGenres = ['Todos', ...visibleMovies.map((m) => m.genre).where((g) => g.isNotEmpty).toSet()];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mi Historial de Cine')),
@@ -245,7 +253,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
                                         }
                                       }
                                     },
-                              onDelete: () async {
+                              onDelete: movie.visitId == null ? null : () async {
                                 final deleted =
                                     movie.visitId != null &&
                                     await appState.eliminarPeliculaVista(

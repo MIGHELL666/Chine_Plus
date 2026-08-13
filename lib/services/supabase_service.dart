@@ -10,6 +10,50 @@ class SupabaseService {
           .map((r) => Movie.fromMap(r))
           .toList();
 
+  Future<List<Movie>> obtenerPeliculasAdmin() async =>
+      (await _supabase.from('peliculas').select().order('fecha_creacion', ascending: false))
+          .map((r) => Movie.fromMap(r))
+          .toList();
+
+  Future<void> crearPelicula({
+    required String titulo,
+    String? posterUrl,
+    String? genero,
+    int? duracionMinutos,
+    String? descripcion,
+    DateTime? fechaEstreno,
+    String estado = 'activo',
+  }) async {
+    await _supabase.from('peliculas').insert({
+      'titulo': titulo.trim(),
+      'poster_url': posterUrl?.trim().isEmpty == true ? null : posterUrl?.trim(),
+      'genero': genero?.trim().isEmpty == true ? null : genero?.trim(),
+      'duracion_minutos': duracionMinutos,
+      'descripcion': descripcion?.trim().isEmpty == true ? null : descripcion?.trim(),
+      'fecha_estreno': fechaEstreno?.toIso8601String().split('T').first,
+      'estado': estado,
+    });
+  }
+
+  Future<void> actualizarPelicula(Movie movie) async {
+    await _supabase.from('peliculas').update({
+      'titulo': movie.title.trim(),
+      'poster_url': movie.posterUrl.trim().isEmpty ? null : movie.posterUrl.trim(),
+      'genero': movie.genre.trim().isEmpty ? null : movie.genre.trim(),
+      'duracion_minutos': movie.durationMinutes == 0 ? null : movie.durationMinutes,
+      'descripcion': movie.description.trim().isEmpty ? null : movie.description.trim(),
+      'fecha_estreno': movie.releaseDate?.toIso8601String().split('T').first,
+      'estado': movie.status,
+    }).eq('id', movie.id);
+  }
+
+  Future<void> actualizarEstadoPelicula(String id, String estado) async {
+    if (estado != 'activo' && estado != 'inactivo') {
+      throw ArgumentError('Estado de película inválido');
+    }
+    await _supabase.from('peliculas').update({'estado': estado}).eq('id', id);
+  }
+
   Future<List<Movie>> obtenerPeliculasVistas(String usuarioId) async {
     final rows = await _supabase
         .from('visitas')
@@ -106,6 +150,21 @@ class SupabaseService {
       (await _supabase.from('cines').select().eq('estado', 'activo'))
           .map((r) => Cinema.fromMap(r))
           .toList();
+
+  Future<List<Cinema>> obtenerCinesAdmin() async =>
+      (await _supabase.from('cines').select().order('fecha_creacion', ascending: false)).map((r) => Cinema.fromMap(r)).toList();
+
+  Future<void> crearCine({required String googlePlaceId, required String nombre, String? direccion, double? latitud, double? longitud}) async {
+    await _supabase.from('cines').insert({'google_place_id': googlePlaceId.trim(), 'nombre_referencia': nombre.trim(), 'direccion_referencia': direccion?.trim().isEmpty == true ? null : direccion?.trim(), 'latitud': latitud, 'longitud': longitud});
+  }
+
+  Future<void> actualizarCine(Cinema cine) async {
+    await _supabase.from('cines').update({'google_place_id': cine.googlePlaceId.trim(), 'nombre_referencia': cine.name.trim(), 'direccion_referencia': cine.address.trim().isEmpty ? null : cine.address.trim(), 'latitud': cine.latitude, 'longitud': cine.longitude, 'estado': cine.status}).eq('id', cine.id);
+  }
+
+  Future<void> actualizarEstadoCine(String id, String estado) async {
+    await _supabase.from('cines').update({'estado': estado}).eq('id', id);
+  }
   Future<List<Reward>> obtenerPromociones() async =>
       (await _supabase.from('promociones').select('id,nombre,descripcion,imagen_url,puntos_requeridos,existencias,fecha_inicio,fecha_fin,estado,fecha_creacion,fecha_actualizacion,promociones_cines(cine_id)'))
           .map((r) => Reward.fromMap(r))
@@ -115,10 +174,10 @@ class SupabaseService {
     final row = await _supabase
         .from('promociones')
         .insert(_promotionPayload(reward))
-        .select('id,codigo')
+        .select('id')
         .single();
     final id = row['id'].toString();
-    await _replacePromotionCinemas(id, reward.cinemaIds);
+    await _addPromotionCinemas(id, reward.cinemaIds);
     return id;
   }
 
@@ -142,6 +201,14 @@ class SupabaseService {
         .from('promociones_cines')
         .delete()
         .eq('promocion_id', promotionId);
+    if (cinemaIds.isEmpty) return;
+    await _addPromotionCinemas(promotionId, cinemaIds);
+  }
+
+  Future<void> _addPromotionCinemas(
+    String promotionId,
+    List<String> cinemaIds,
+  ) async {
     if (cinemaIds.isEmpty) return;
     await _supabase.from('promociones_cines').insert(
       cinemaIds
@@ -181,6 +248,31 @@ class SupabaseService {
       debugPrintStack(stackTrace: stack);
       rethrow;
     }
+  }
+
+  Future<List<AppUser>> obtenerUsuarios() async {
+    final rows = await _supabase.from('perfiles').select().order('fecha_registro');
+    return rows.map((row) => AppUser.fromMap(row)).toList();
+  }
+
+  Future<AppUser> actualizarPerfilAdmin(AppUser user) async {
+    final row = await _supabase
+        .from('perfiles')
+        .update({
+          'nombre': user.name.trim(),
+          'correo': user.email.trim().toLowerCase(),
+          'rol': user.role == 'admin' ? 'administrador' : 'usuario',
+          'estado': user.status == 'Activo' ? 'activo' : 'inactivo',
+          'fecha_actualizacion': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+    return AppUser.fromMap(row);
+  }
+
+  Future<void> eliminarPerfilAdmin(String userId) async {
+    await _supabase.from('perfiles').delete().eq('id', userId);
   }
 
   Future<AppUser> crearPerfil({

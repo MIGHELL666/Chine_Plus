@@ -70,6 +70,8 @@ class Movie {
   final String genre;
   final int durationMinutes;
   final String description;
+  final DateTime? releaseDate;
+  final String status;
 
   Movie({
     required this.id,
@@ -83,6 +85,8 @@ class Movie {
     required this.genre,
     required this.durationMinutes,
     required this.description,
+    this.releaseDate,
+    this.status = 'activo',
   });
 
   factory Movie.fromMap(
@@ -107,6 +111,8 @@ class Movie {
     genre: row['genero'] ?? personalGenre ?? '',
     durationMinutes: row['duracion_minutos'] ?? personalDuration ?? 0,
     description: row['descripcion'] ?? personalComment ?? '',
+    releaseDate: row['fecha_estreno'] == null ? null : DateTime.tryParse(row['fecha_estreno'].toString()),
+    status: row['estado']?.toString() ?? 'activo',
   );
 
   bool get isCatalogMovie => catalogMovieId != null;
@@ -133,37 +139,45 @@ class Movie {
       genre: genre ?? this.genre,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       description: description ?? this.description,
+      releaseDate: releaseDate,
+      status: status,
     );
   }
 }
 
 class Cinema {
   final String id;
+  final String googlePlaceId;
   final String name;
   final String address;
   final String schedule;
   final String distance;
   final double latitude;
   final double longitude;
+  final String status;
 
   Cinema({
     required this.id,
+    this.googlePlaceId = '',
     required this.name,
     required this.address,
     required this.schedule,
     required this.distance,
     required this.latitude,
     required this.longitude,
+    this.status = 'activo',
   });
 
   factory Cinema.fromMap(Map<String, dynamic> row) => Cinema(
     id: row['id'].toString(),
+    googlePlaceId: row['google_place_id']?.toString() ?? '',
     name: row['nombre_referencia'] ?? '',
     address: row['direccion_referencia'] ?? '',
     schedule: '',
     distance: '',
     latitude: (row['latitud'] as num?)?.toDouble() ?? 0,
     longitude: (row['longitud'] as num?)?.toDouble() ?? 0,
+    status: row['estado']?.toString() ?? 'activo',
   );
 }
 
