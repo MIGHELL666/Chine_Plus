@@ -38,7 +38,14 @@ class AppButton extends StatelessWidget {
                 Icon(icon, size: 20),
                 const SizedBox(width: 8),
               ],
-              Text(text),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ],
           );
 
@@ -342,8 +349,8 @@ class MovieCard extends StatelessWidget {
         children: [
           // Movie Poster (Fallback to jade placeholder design if fails)
           Container(
-            width: 90,
-            height: 120,
+            width: MediaQuery.sizeOf(context).width < 360 ? 72 : 90,
+            height: MediaQuery.sizeOf(context).width < 360 ? 96 : 120,
             decoration: BoxDecoration(
               color: AppTheme.mediumGrey,
               image: DecorationImage(
@@ -400,6 +407,8 @@ class MovieCard extends StatelessWidget {
                   Text(
                     'Vista el ${movie.watchDate}',
                     style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.6)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -545,8 +554,9 @@ class RewardCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  runSpacing: 4,
                   children: [
                     Text(
                       'Stock: ${reward.stock ?? 'No especificado'}',

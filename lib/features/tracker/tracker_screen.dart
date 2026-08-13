@@ -21,14 +21,9 @@ class _TrackerScreenState extends State<TrackerScreen> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
 
-    // The list shows the global active catalog plus the user's personal history.
-    // History remains in appState.movies; catalog movies remain global.
-    final visibleMovies = <Movie>[...appState.catalogMovies];
-    for (final watchedMovie in appState.movies) {
-      if (!visibleMovies.any((movie) => movie.id == watchedMovie.id && movie.isCatalogMovie == watchedMovie.isCatalogMovie)) {
-        visibleMovies.add(watchedMovie);
-      }
-    }
+    // El catálogo global solo se usa para seleccionar una película en el
+    // formulario. El Tracker muestra únicamente visitas del usuario.
+    final visibleMovies = List<Movie>.of(appState.movies);
 
     final filteredMovies = visibleMovies.where((movie) {
       final matchesSearch =
@@ -610,7 +605,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
                   duracionMinutosPersonal: isManual
                       ? int.tryParse(duration.text)
                       : null,
-                  calificacionPersonal: isManual ? rating : null,
+                  calificacionPersonal: rating,
                   comentarioPersonal: isManual ? comment.text.trim() : null,
                 );
                 if (!dialogContext.mounted) return;
@@ -819,7 +814,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
                     duracionMinutosPersonal: manualMovie
                         ? int.tryParse(minutesController.text)
                         : null,
-                    calificacionPersonal: manualMovie ? rating : null,
+                    calificacionPersonal: rating,
                     comentarioPersonal: manualMovie
                         ? commentController.text.trim()
                         : null,

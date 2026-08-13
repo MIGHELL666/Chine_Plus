@@ -547,18 +547,21 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(reward.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        title: Text(reward.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        content: SizedBox(
+          width: (MediaQuery.sizeOf(dialogContext).width - 80).clamp(240.0, 420.0),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             if (reward.imageUrl.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   reward.imageUrl,
                   height: 120,
-                  width: double.infinity,
+                  width: 360,
                   fit: BoxFit.cover,
                   errorBuilder: (e, s, t) => Container(
                     height: 120,
@@ -573,7 +576,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Puntos necesarios:'),
+                const Flexible(child: Text('Puntos necesarios:')),
                 Text(
                   '${reward.pointsRequired} pts',
                   style: const TextStyle(
@@ -587,7 +590,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Tus puntos actuales:'),
+                const Flexible(child: Text('Tus puntos actuales:')),
                 Text(
                   '${appState.currentUser!.points} pts',
                   style: TextStyle(
@@ -599,7 +602,9 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                 ),
               ],
             ),
-          ],
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(

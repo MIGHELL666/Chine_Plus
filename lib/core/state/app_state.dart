@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/models.dart';
 import '../../services/supabase_service.dart';
@@ -182,6 +183,14 @@ class AppState extends ChangeNotifier {
   Future<void> actualizarPeliculaAdmin(Movie movie) async {
     await _service.actualizarPelicula(movie);
     await cargarPeliculasAdmin();
+  }
+
+  Future<String> subirPosterAdmin(Uint8List bytes, String extension) {
+    return _service.subirPoster(bytes, extension);
+  }
+
+  Future<void> eliminarPosterAnteriorAdmin(String? url) {
+    return _service.eliminarPosterSiEsDelBucket(url);
   }
 
   Future<void> actualizarEstadoPeliculaAdmin(Movie movie) async {
@@ -759,6 +768,14 @@ class AppState extends ChangeNotifier {
       await _service.crearPromocion(reward);
     }
     await _reloadRewards();
+  }
+
+  Future<String> subirImagenPromocionAdmin(Uint8List bytes, String extension) {
+    return _service.subirImagenPromocion(bytes, extension);
+  }
+
+  Future<void> eliminarImagenPromocionAnteriorAdmin(String? url) {
+    return _service.eliminarImagenPromocionSiEsDelBucket(url);
   }
 
   Future<void> deleteReward(String rewardId) async {

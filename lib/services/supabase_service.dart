@@ -1,9 +1,68 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:math';
 import '../shared/models/models.dart';
 
 class SupabaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  Future<String> subirPoster(Uint8List bytes, String extension) async {
+    final safeExtension = extension.toLowerCase().replaceFirst('.', '');
+    if (!['jpg', 'jpeg', 'png', 'webp'].contains(safeExtension)) {
+      throw ArgumentError('Formato de imagen no permitido');
+    }
+    final suffix = '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
+    final path = 'movie-posters/$suffix.$safeExtension';
+    await _supabase.storage.from('movie-posters').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        contentType: 'image/${safeExtension == 'jpg' ? 'jpeg' : safeExtension}',
+        upsert: false,
+      ),
+    );
+    return _supabase.storage.from('movie-posters').getPublicUrl(path);
+  }
+
+  Future<void> eliminarPosterSiEsDelBucket(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final marker = '/storage/v1/object/public/movie-posters/';
+    final index = url.indexOf(marker);
+    if (index == -1) return;
+    final path = Uri.decodeComponent(url.substring(index + marker.length));
+    if (path.isNotEmpty && !path.contains('..')) {
+      await _supabase.storage.from('movie-posters').remove([path]);
+    }
+  }
+
+  Future<String> subirImagenPromocion(Uint8List bytes, String extension) async {
+    final safeExtension = extension.toLowerCase().replaceFirst('.', '');
+    if (!['jpg', 'jpeg', 'png', 'webp'].contains(safeExtension)) {
+      throw ArgumentError('Formato de imagen no permitido');
+    }
+    final suffix = '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
+    final path = 'promo-images/$suffix.$safeExtension';
+    await _supabase.storage.from('promo-images').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        contentType: 'image/${safeExtension == 'jpg' ? 'jpeg' : safeExtension}',
+        upsert: false,
+      ),
+    );
+    return _supabase.storage.from('promo-images').getPublicUrl(path);
+  }
+
+  Future<void> eliminarImagenPromocionSiEsDelBucket(String? url) async {
+    if (url == null || url.isEmpty) return;
+    const marker = '/storage/v1/object/public/promo-images/';
+    final index = url.indexOf(marker);
+    if (index == -1) return;
+    final path = Uri.decodeComponent(url.substring(index + marker.length));
+    if (path.isNotEmpty && !path.contains('..')) {
+      await _supabase.storage.from('promo-images').remove([path]);
+    }
+  }
 
   Future<List<Movie>> obtenerPeliculas() async =>
       (await _supabase.from('peliculas').select().eq('estado', 'activo'))

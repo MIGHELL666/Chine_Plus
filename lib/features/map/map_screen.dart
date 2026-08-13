@@ -26,25 +26,30 @@ class _MapScreenState extends State<MapScreen> {
     final valid = cinemas
         .where((c) => c.latitude != 0 && c.longitude != 0)
         .toList();
-    if (valid.isEmpty) return const [];
-    final minLat = valid.map((c) => c.latitude).reduce((a, b) => a < b ? a : b);
-    final maxLat = valid.map((c) => c.latitude).reduce((a, b) => a > b ? a : b);
-    final minLng = valid
-        .map((c) => c.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    final maxLng = valid
-        .map((c) => c.longitude)
-        .reduce((a, b) => a > b ? a : b);
+    final minLat = valid.isEmpty ? 0.0 : valid.map((c) => c.latitude).reduce((a, b) => a < b ? a : b);
+    final maxLat = valid.isEmpty ? 0.0 : valid.map((c) => c.latitude).reduce((a, b) => a > b ? a : b);
+    final minLng = valid.isEmpty ? 0.0 : valid.map((c) => c.longitude).reduce((a, b) => a < b ? a : b);
+    final maxLng = valid.isEmpty ? 0.0 : valid.map((c) => c.longitude).reduce((a, b) => a > b ? a : b);
     final latRange = (maxLat - minLat).abs();
     final lngRange = (maxLng - minLng).abs();
 
-    return valid.map((cinema) {
-      final top =
-          70.0 +
-          (latRange == 0 ? 150 : (maxLat - cinema.latitude) / latRange * 260);
-      final left =
-          30.0 +
-          (lngRange == 0 ? 130 : (cinema.longitude - minLng) / lngRange * 260);
+    return cinemas.asMap().entries.map((entry) {
+      final index = entry.key;
+      final cinema = entry.value;
+      final hasCoordinates = cinema.latitude != 0 && cinema.longitude != 0;
+      double top;
+      double left;
+      if (hasCoordinates && valid.isNotEmpty) {
+        top = 70.0 + (latRange == 0 ? 150 : (maxLat - cinema.latitude) / latRange * 260);
+        left = 30.0 + (lngRange == 0 ? 130 : (cinema.longitude - minLng) / lngRange * 260);
+      } else {
+        // Posición visual estable para que también sean visibles los cines
+        // administrados sin coordenadas. No se guarda ni se usa como ubicación real.
+        final column = index % 4;
+        final row = index ~/ 4;
+        left = 30.0 + column * 78.0;
+        top = 70.0 + (row % 3) * 82.0;
+      }
       final selected = _selectedCinema?.id == cinema.id;
       return Positioned(
         top: top.clamp(20.0, 330.0),
@@ -96,7 +101,11 @@ class _MapScreenState extends State<MapScreen> {
     final appState = Provider.of<AppState>(context);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Set default selected cinema if not set
+    // Seleccionar únicamente un cine que exista en el catálogo real.
+    if (_selectedCinema != null &&
+        !appState.cinemas.any((cinema) => cinema.id == _selectedCinema!.id)) {
+      _selectedCinema = null;
+    }
     if (_selectedCinema == null && appState.cinemas.isNotEmpty) {
       _selectedCinema = appState.cinemas.first;
     }
@@ -105,14 +114,23 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(title: const Text('Cines Cercanos')),
       body: Stack(
         children: [
-          // 1. Stylized Mock Map Background
+          // 1. Mapa visual con marcadores del catálogo real.
           Positioned.fill(
             child: Container(
               color: colorScheme.brightness == Brightness.dark
                   ? AppTheme.movieBlack
                   : Colors.grey.shade100,
-              child: Stack(
-                children: [
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 3.0,
+                boundaryMargin: const EdgeInsets.all(180),
+                panEnabled: true,
+                scaleEnabled: true,
+                child: SizedBox(
+                  width: 720,
+                  height: 620,
+                  child: Stack(
+                    children: [
                   // Map Grid Lines representation
                   Positioned.fill(
                     child: CustomPaint(
@@ -124,162 +142,42 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
 
-                  // Decorative stylized map details (green areas, roads, lakes)
-                  Positioned(
-                    top: 120,
-                    left: 40,
-                    child: _buildMapFeature(
-                      width: 140,
-                      height: 80,
-                      color: AppTheme.jadeGreen.withValues(alpha: 0.08),
-                      label: 'Bosque Central',
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 220,
-                    right: 30,
-                    child: _buildMapFeature(
-                      width: 180,
-                      height: 120,
-                      color: Colors.blue.withValues(alpha: 0.06),
-                      label: 'Lago del Parque',
-                    ),
-                  ),
-
-                  // Roads
-                  Positioned(
-                    top: 240,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 24,
-                      color: colorScheme.brightness == Brightness.dark
-                          ? Colors.grey.shade900
-                          : Colors.grey.shade200,
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Av. de la Constitución',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: colorScheme.onSurface.withValues(alpha: 0.3),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    left: 180,
-                    child: Container(
-                      width: 24,
-                      color: colorScheme.brightness == Brightness.dark
-                          ? Colors.grey.shade900
-                          : Colors.grey.shade200,
-                      alignment: Alignment.topCenter,
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: RotatedBox(
-                        quarterTurns: 1,
-                        child: Text(
-                          'Calzada del Cine',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: colorScheme.onSurface.withValues(alpha: 0.3),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
                   // Cinema markers positioned from Supabase latitude/longitude.
                   // The custom map is only a visual canvas; no mock IDs are used.
-                  ..._cinemaMarkers(context, appState.cinemas),
-                  /*
-                  ...appState.cinemas.map((cinema) {
-                    final isSelected = _selectedCinema?.id == cinema.id;
-                    // Determine coordinates for mock pins
-                    double top = 100;
-                    double left = 80;
-                    if (cinema.id == 'CIN-001') {
-                      top = 180;
-                      left = 90;
-                    } else if (cinema.id == 'CIN-002') {
-                      top = 280;
-                      left = 240;
-                    } else if (cinema.id == 'CIN-003') {
-                      top = 80;
-                      left = 220;
-                    }
-
-                    return Positioned(
-                      top: top,
-                      left: left,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCinema = cinema;
-                          });
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedScale(
-                              scale: isSelected ? 1.3 : 1.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? AppTheme.jadeGreen : AppTheme.mediumGrey,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    )
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.local_play,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surface.withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isSelected ? AppTheme.jadeGreen : Colors.transparent,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                cinema.name,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                            )
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  */
-                ],
+                      ..._cinemaMarkers(context, appState.cinemas),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
+
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: appState.cinemas.isEmpty
+                ? _buildEmptyCinemasCard(colorScheme)
+                : Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          const Icon(Icons.local_movies, color: AppTheme.jadeGreen),
+                          const SizedBox(width: 8),
+                          Text('${appState.cinemas.length} cines disponibles'),
+                          TextButton(
+                            onPressed: () => _showCinemaPicker(context, appState.cinemas),
+                            child: const Text('Ver lista'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+            ),
 
           // 2. Info Card Overlay at Bottom
           if (_selectedCinema != null)
@@ -391,26 +289,49 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildMapFeature({
-    required double width,
-    required double height,
-    required Color color,
-    required String label,
-  }) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
+  Widget _buildEmptyCinemasCard(ColorScheme colorScheme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.location_off_outlined, color: Colors.grey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No hay cines activos en el catálogo.',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ),
+          ],
+        ),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 10,
-          color: Colors.grey,
-          fontWeight: FontWeight.bold,
+    );
+  }
+
+  void _showCinemaPicker(BuildContext context, List<Cinema> cinemas) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(16),
+          itemCount: cinemas.length,
+          separatorBuilder: (_, __) => const Divider(),
+          itemBuilder: (context, index) {
+            final cinema = cinemas[index];
+            return ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.local_movies)),
+              title: Text(cinema.name),
+              subtitle: Text(cinema.address.isEmpty ? 'Dirección no disponible' : cinema.address),
+              selected: _selectedCinema?.id == cinema.id,
+              onTap: () {
+                setState(() => _selectedCinema = cinema);
+                Navigator.pop(context);
+              },
+            );
+          },
         ),
       ),
     );

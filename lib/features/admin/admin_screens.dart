@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/theme.dart';
@@ -21,6 +22,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     'Premios Canjeables',
     'Catálogo de Películas',
     'Catálogo de Cines',
+    'Estadísticas de Usuarios',
   ];
 
   @override
@@ -36,6 +38,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
       _AdminRewardsSection(appState: appState),
       _AdminMoviesSection(appState: appState),
       _AdminCinemasSection(appState: appState),
+      _AdminUserStatsSection(appState: appState),
     ];
 
     Widget buildDrawer() {
@@ -110,6 +113,16 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               selectedColor: AppTheme.jadeGreen,
               onTap: () {
                 setState(() => _selectedIndex = 1);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bar_chart_outlined),
+              title: Text(_titles[5]),
+              selected: _selectedIndex == 5,
+              selectedColor: AppTheme.jadeGreen,
+              onTap: () {
+                setState(() => _selectedIndex = 5);
                 Navigator.pop(context);
               },
             ),
@@ -199,6 +212,11 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   selectedIcon: const Icon(Icons.local_movies),
                   label: Text(_titles[4]),
                 ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  selectedIcon: const Icon(Icons.bar_chart),
+                  label: Text(_titles[5]),
+                ),
               ],
             ),
             const VerticalDivider(width: 1, thickness: 1),
@@ -211,6 +229,107 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminUserStatsSection extends StatelessWidget {
+  final AppState appState;
+
+  const _AdminUserStatsSection({required this.appState});
+
+  @override
+  Widget build(BuildContext context) {
+    final users = appState.users;
+    final total = users.length;
+    final active = users.where((user) => user.status.toLowerCase() == 'activo').length;
+    final admins = users.where((user) => user.role.toLowerCase() == 'admin' || user.role.toLowerCase() == 'administrador').length;
+    final regular = total - admins;
+    final inactive = total - active;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 620;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Usuarios registrados', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 6),
+              const Text('Resumen basado en los perfiles reales cargados desde Supabase.'),
+              const SizedBox(height: 20),
+              GridView.count(
+                crossAxisCount: compact ? 2 : 4,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                // Más altura en pantallas estrechas para evitar bottom overflow.
+                childAspectRatio: compact ? 1.15 : 1.6,
+                children: [
+                  _statCard(context, 'Total', total, Icons.people, AppTheme.jadeGreen),
+                  _statCard(context, 'Activos', active, Icons.person, Colors.blueAccent),
+                  _statCard(context, 'Administradores', admins, Icons.admin_panel_settings, AppTheme.goldAccent),
+                  _statCard(context, 'Inactivos', inactive, Icons.person_off, Colors.redAccent),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Distribución por rol', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 20),
+                      _bar(context, 'Usuarios', regular, total, Colors.blueAccent),
+                      const SizedBox(height: 14),
+                      _bar(context, 'Administradores', admins, total, AppTheme.goldAccent),
+                      if (total == 0) const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text('No hay usuarios para mostrar.'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _statCard(BuildContext context, String label, int value, IconData icon, Color color) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Icon(icon, color: color),
+            Text('$value', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bar(BuildContext context, String label, int value, int total, Color color) {
+    final fraction = total == 0 ? 0.0 : value / total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [Expanded(child: Text(label)), Text('$value')]),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(value: fraction, minHeight: 12, color: color),
+        ),
+      ],
     );
   }
 }
@@ -240,7 +359,9 @@ class _AdminDashboardSection extends StatelessWidget {
               crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 2,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 1.3,
+              // Tarjetas más altas para que títulos largos, como
+              // "Películas de catálogo", no provoquen overflow.
+              childAspectRatio: MediaQuery.of(context).size.width > 600 ? 1.05 : 1.15,
               children: [
                 _buildStatMetric(
                   context,
@@ -296,9 +417,14 @@ class _AdminDashboardSection extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Icon(icon, color: color, size: 24),
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ),
               ],
             ),
@@ -611,6 +737,9 @@ class _AdminRewardsSection extends StatelessWidget {
     String status = reward?.status == 'activa' ? 'Activo' :
         reward?.status == 'inactiva' ? 'Inactivo' : (reward == null ? 'Activo' : 'Inactivo');
     final selectedCinemaIds = <String>{...?reward?.cinemaIds};
+    PlatformFile? selectedImage;
+    String? imageError;
+    bool saving = false;
 
     showDialog(
       context: context,
@@ -637,6 +766,53 @@ class _AdminRewardsSection extends StatelessWidget {
                     hintText: 'Escribe una breve descripción...',
                     maxLines: 2,
                     validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  StatefulBuilder(
+                    builder: (context, setImageState) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (selectedImage?.bytes != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(selectedImage!.bytes!, height: 150, fit: BoxFit.cover),
+                          )
+                        else if (reward?.imageUrl.isNotEmpty == true)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(reward!.imageUrl, height: 150, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(height: 50, child: Icon(Icons.broken_image))),
+                          )
+                        else
+                          const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text('Sin imagen seleccionada', textAlign: TextAlign.center),
+                          ),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.image_outlined),
+                          label: Text(selectedImage == null ? 'Seleccionar imagen' : selectedImage!.name),
+                          onPressed: saving ? null : () async {
+                            try {
+                              final result = await FilePicker.platform.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+                                withData: true,
+                              );
+                              if (result == null || result.files.single.bytes == null) return;
+                              setImageState(() {
+                                selectedImage = result.files.single;
+                                imageError = null;
+                              });
+                            } catch (error) {
+                              setImageState(() => imageError = 'No se pudo seleccionar la imagen: $error');
+                            }
+                          },
+                        ),
+                        if (imageError != null)
+                          Text(imageError!, style: const TextStyle(color: Colors.red)),
+                        const Text('Formatos permitidos: JPG, PNG y WEBP.'),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -719,37 +895,47 @@ class _AdminRewardsSection extends StatelessWidget {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.jadeGreen),
-              onPressed: () {
+              onPressed: saving ? null : () async {
                 if (formKey.currentState!.validate()) {
+                  setDialogState(() => saving = true);
+                  try {
+                    var imageUrl = reward?.imageUrl ?? '';
+                    if (selectedImage != null) {
+                      final extension = selectedImage!.extension?.toLowerCase();
+                      if (extension == null || !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
+                        setDialogState(() {
+                          imageError = 'Selecciona una imagen JPG, PNG o WEBP.';
+                          saving = false;
+                        });
+                        return;
+                      }
+                      imageUrl = await appState.subirImagenPromocionAdmin(selectedImage!.bytes!, extension);
+                    }
                   final newReward = Reward(
                     id: reward?.id ?? 'REW-${DateTime.now().millisecondsSinceEpoch}',
                     name: nameController.text,
                     description: descController.text,
-                    imageUrl: reward?.imageUrl ?? '',
+                    imageUrl: imageUrl,
                     pointsRequired: int.parse(pointsController.text),
                     stock: int.tryParse(stockController.text),
                     status: status.toLowerCase() == 'activo' ? 'activa' : 'inactiva',
                     cinemaIds: selectedCinemaIds.toList(),
                   );
-                  () async {
-                    try {
-                      await appState.saveReward(newReward);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        showAppSnackbar(
-                          context,
-                          message: reward == null ? 'Promoción creada con éxito.' : 'Promoción editada con éxito.',
-                        );
-                      }
-                    } catch (error) {
-                      if (context.mounted) {
-                        showAppSnackbar(context, message: 'Error de Supabase: $error');
-                      }
+                    await appState.saveReward(newReward);
+                    if (reward != null && selectedImage != null && reward.imageUrl != imageUrl) {
+                      await appState.eliminarImagenPromocionAnteriorAdmin(reward.imageUrl);
                     }
-                  }();
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showAppSnackbar(context, message: reward == null ? 'Promoción creada con éxito.' : 'Promoción editada con éxito.');
+                    }
+                  } catch (error) {
+                    if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase/Storage: $error');
+                    if (context.mounted) setDialogState(() => saving = false);
+                  }
                 }
               },
-              child: const Text('Guardar'),
+              child: saving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Guardar'),
             ),
           ],
         ),
@@ -846,12 +1032,13 @@ class _AdminMoviesSectionState extends State<_AdminMoviesSection> {
 
   void _showMovieForm(BuildContext context, [Movie? movie]) {
     final title = TextEditingController(text: movie?.title ?? '');
-    final poster = TextEditingController(text: movie?.posterUrl ?? '');
     final genre = TextEditingController(text: movie?.genre ?? '');
     final duration = TextEditingController(text: movie == null || movie.durationMinutes == 0 ? '' : '${movie.durationMinutes}');
     final description = TextEditingController(text: movie?.description ?? '');
     DateTime? releaseDate = movie?.releaseDate;
     final formKey = GlobalKey<FormState>();
+    PlatformFile? selectedPoster;
+    String? posterError;
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
@@ -859,7 +1046,45 @@ class _AdminMoviesSectionState extends State<_AdminMoviesSection> {
         content: SingleChildScrollView(child: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
           AppTextField(controller: title, labelText: 'Título *', hintText: 'Título de la película', validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null),
           const SizedBox(height: 10),
-          AppTextField(controller: poster, labelText: 'Poster URL', hintText: 'https://...'),
+          StatefulBuilder(builder: (context, setPosterState) {
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (selectedPoster?.bytes != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(selectedPoster!.bytes!, height: 180, fit: BoxFit.cover),
+                )
+              else if (movie?.posterUrl.isNotEmpty == true)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(movie!.posterUrl, height: 180, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox(height: 40, child: Icon(Icons.broken_image))),
+                ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.image_outlined),
+                label: Text(selectedPoster == null ? 'Seleccionar poster' : selectedPoster!.name),
+                onPressed: () async {
+                  try {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+                      withData: true,
+                    );
+                    if (result == null || result.files.single.bytes == null) return;
+                    setPosterState(() {
+                      selectedPoster = result.files.single;
+                      posterError = null;
+                    });
+                  } catch (error) {
+                    setPosterState(() => posterError = 'No se pudo seleccionar la imagen: $error');
+                  }
+                },
+              ),
+              if (posterError != null) Text(posterError!, style: const TextStyle(color: Colors.red)),
+              Text(movie?.posterUrl.isNotEmpty == true && selectedPoster == null
+                  ? 'Se conservará el poster actual si no seleccionas otro.'
+                  : 'Formatos permitidos: JPG, PNG y WEBP.'),
+            ]);
+          }),
           const SizedBox(height: 10),
           AppTextField(controller: genre, labelText: 'Género', hintText: 'Género'),
           const SizedBox(height: 10),
@@ -877,12 +1102,24 @@ class _AdminMoviesSectionState extends State<_AdminMoviesSection> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
           ElevatedButton(onPressed: () async {
             if (!formKey.currentState!.validate()) return;
-            final result = Movie(id: movie?.id ?? '', title: title.text, posterUrl: poster.text, watchDate: '', cinemaName: '', rating: 0, genre: genre.text, durationMinutes: int.tryParse(duration.text) ?? 0, description: description.text, releaseDate: releaseDate, status: movie?.status ?? 'activo');
             try {
+              String? posterUrl = movie?.posterUrl;
+              if (selectedPoster != null) {
+                final extension = selectedPoster!.extension?.toLowerCase();
+                if (extension == null || !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
+                  setDialogState(() => posterError = 'Selecciona una imagen JPG, PNG o WEBP.');
+                  return;
+                }
+                posterUrl = await widget.appState.subirPosterAdmin(selectedPoster!.bytes!, extension);
+              }
+              final result = Movie(id: movie?.id ?? '', title: title.text, posterUrl: posterUrl ?? '', watchDate: '', cinemaName: '', rating: 0, genre: genre.text, durationMinutes: int.tryParse(duration.text) ?? 0, description: description.text, releaseDate: releaseDate, status: movie?.status ?? 'activo');
               if (movie == null) {
                 await widget.appState.crearPeliculaAdmin(titulo: result.title, posterUrl: result.posterUrl, genero: result.genre, duracionMinutos: result.durationMinutes == 0 ? null : result.durationMinutes, descripcion: result.description, fechaEstreno: releaseDate);
               } else {
                 await widget.appState.actualizarPeliculaAdmin(result);
+                if (selectedPoster != null && movie.posterUrl != result.posterUrl) {
+                  await widget.appState.eliminarPosterAnteriorAdmin(movie.posterUrl);
+                }
               }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             } catch (error) {
@@ -963,9 +1200,17 @@ class _AdminCinemasSectionState extends State<_AdminCinemasSection> {
         const SizedBox(height: 10),
         AppTextField(controller: address, labelText: 'Dirección', hintText: 'Dirección'),
         const SizedBox(height: 10),
-        AppTextField(controller: latitude, labelText: 'Latitud', hintText: 'Ej. 21.88', keyboardType: TextInputType.numberWithOptions(decimal: true)),
+        AppTextField(controller: latitude, labelText: 'Latitud (opcional)', hintText: 'Ej. 21.88', keyboardType: TextInputType.numberWithOptions(decimal: true), validator: (v) {
+          if (v == null || v.trim().isEmpty) return null;
+          final value = double.tryParse(v.trim());
+          return value == null || value < -90 || value > 90 ? 'Latitud inválida' : null;
+        }),
         const SizedBox(height: 10),
-        AppTextField(controller: longitude, labelText: 'Longitud', hintText: 'Ej. -102.29', keyboardType: TextInputType.numberWithOptions(decimal: true)),
+        AppTextField(controller: longitude, labelText: 'Longitud (opcional)', hintText: 'Ej. -102.29', keyboardType: TextInputType.numberWithOptions(decimal: true), validator: (v) {
+          if (v == null || v.trim().isEmpty) return null;
+          final value = double.tryParse(v.trim());
+          return value == null || value < -180 || value > 180 ? 'Longitud inválida' : null;
+        }),
       ]))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
