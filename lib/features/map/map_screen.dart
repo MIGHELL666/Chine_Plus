@@ -21,6 +21,76 @@ class _MapScreenState extends State<MapScreen> {
     // Default select first cinema
   }
 
+  List<Widget> _cinemaMarkers(BuildContext context, List<Cinema> cinemas) {
+    if (cinemas.isEmpty) return const [];
+    final valid = cinemas
+        .where((c) => c.latitude != 0 && c.longitude != 0)
+        .toList();
+    if (valid.isEmpty) return const [];
+    final minLat = valid.map((c) => c.latitude).reduce((a, b) => a < b ? a : b);
+    final maxLat = valid.map((c) => c.latitude).reduce((a, b) => a > b ? a : b);
+    final minLng = valid
+        .map((c) => c.longitude)
+        .reduce((a, b) => a < b ? a : b);
+    final maxLng = valid
+        .map((c) => c.longitude)
+        .reduce((a, b) => a > b ? a : b);
+    final latRange = (maxLat - minLat).abs();
+    final lngRange = (maxLng - minLng).abs();
+
+    return valid.map((cinema) {
+      final top =
+          70.0 +
+          (latRange == 0 ? 150 : (maxLat - cinema.latitude) / latRange * 260);
+      final left =
+          30.0 +
+          (lngRange == 0 ? 130 : (cinema.longitude - minLng) / lngRange * 260);
+      final selected = _selectedCinema?.id == cinema.id;
+      return Positioned(
+        top: top.clamp(20.0, 330.0),
+        left: left.clamp(20.0, 300.0),
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedCinema = cinema),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: selected ? 1.3 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: selected ? AppTheme.jadeGreen : AppTheme.mediumGrey,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.local_play,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                cinema.name,
+                style: const TextStyle(fontSize: 10),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
@@ -32,9 +102,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cines Cercanos'),
-      ),
+      appBar: AppBar(title: const Text('Cines Cercanos')),
       body: Stack(
         children: [
           // 1. Stylized Mock Map Background
@@ -126,7 +194,10 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
 
-                  // Cinema Pin Markers
+                  // Cinema markers positioned from Supabase latitude/longitude.
+                  // The custom map is only a visual canvas; no mock IDs are used.
+                  ..._cinemaMarkers(context, appState.cinemas),
+                  /*
                   ...appState.cinemas.map((cinema) {
                     final isSelected = _selectedCinema?.id == cinema.id;
                     // Determine coordinates for mock pins
@@ -204,6 +275,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     );
                   }),
+                  */
                 ],
               ),
             ),
@@ -230,7 +302,9 @@ class _MapScreenState extends State<MapScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppTheme.jadeGreen.withValues(alpha: 0.12),
+                                color: AppTheme.jadeGreen.withValues(
+                                  alpha: 0.12,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -253,11 +327,18 @@ class _MapScreenState extends State<MapScreen> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      const Icon(Icons.navigation_outlined, size: 12, color: Colors.grey),
+                                      const Icon(
+                                        Icons.navigation_outlined,
+                                        size: 12,
+                                        color: Colors.grey,
+                                      ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'A ${_selectedCinema!.distance} de ti',
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                        'Distancia no calculada',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -277,11 +358,18 @@ class _MapScreenState extends State<MapScreen> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.access_time_outlined, size: 14, color: AppTheme.jadeGreen),
+                            const Icon(
+                              Icons.access_time_outlined,
+                              size: 14,
+                              color: AppTheme.jadeGreen,
+                            ),
                             const SizedBox(width: 6),
                             Text(
-                              'Horario: ${_selectedCinema!.schedule}',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              'Horario: Horario no disponible',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -344,9 +432,21 @@ class _MapScreenState extends State<MapScreen> {
             ),
             const SizedBox(height: 12),
             _buildDetailRow(Icons.pin_drop, 'Dirección', cinema.address),
-            _buildDetailRow(Icons.access_time, 'Horario General', cinema.schedule),
-            _buildDetailRow(Icons.navigation, 'Distancia de Referencia', cinema.distance),
-            _buildDetailRow(Icons.map, 'Coordenadas del Simulador', 'Lat: ${cinema.latitude}, Lng: ${cinema.longitude}'),
+            _buildDetailRow(
+              Icons.access_time,
+              'Horario General',
+              'Horario no disponible',
+            ),
+            _buildDetailRow(
+              Icons.navigation,
+              'Distancia de Referencia',
+              'Distancia no calculada',
+            ),
+            _buildDetailRow(
+              Icons.map,
+              'Coordenadas',
+              'Lat: ${cinema.latitude}, Lng: ${cinema.longitude}',
+            ),
             const SizedBox(height: 16),
             const Text(
               'Servicios Disponibles:',
@@ -357,9 +457,21 @@ class _MapScreenState extends State<MapScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                Chip(label: Text('Dulcería 3D', style: TextStyle(fontSize: 11))),
-                Chip(label: Text('Estacionamiento', style: TextStyle(fontSize: 11))),
-                Chip(label: Text('Acceso Silla Ruedas', style: TextStyle(fontSize: 11))),
+                Chip(
+                  label: Text('Dulcería 3D', style: TextStyle(fontSize: 11)),
+                ),
+                Chip(
+                  label: Text(
+                    'Estacionamiento',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    'Acceso Silla Ruedas',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
               ],
             ),
           ],
@@ -390,7 +502,10 @@ class _MapScreenState extends State<MapScreen> {
                   fontSize: 13,
                 ),
                 children: [
-                  TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(
+                    text: '$label: ',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   TextSpan(text: value),
                 ],
               ),

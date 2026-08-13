@@ -1,14 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/theme.dart';
 import '../../shared/models/models.dart';
 import '../../shared/widgets/widgets.dart';
 
-class UserDashboardScreen extends StatelessWidget {
+class UserDashboardScreen extends StatefulWidget {
   final Function(int) onTabChange;
 
   const UserDashboardScreen({super.key, required this.onTabChange});
+
+  @override
+  State<UserDashboardScreen> createState() => _UserDashboardScreenState();
+}
+
+class _UserDashboardScreenState extends State<UserDashboardScreen> {
+  AppState? _listenedAppState;
+  bool _qrDialogScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final appState = Provider.of<AppState>(context, listen: false);
+      _listenedAppState = appState;
+      appState.addListener(_onAppStateChanged);
+      _showPendingQrIfNeeded();
+    });
+  }
+
+  @override
+  void dispose() {
+    _listenedAppState?.removeListener(_onAppStateChanged);
+    super.dispose();
+  }
+
+  void _onAppStateChanged() => _showPendingQrIfNeeded();
+
+  void _showPendingQrIfNeeded() {
+    debugPrint('[DATA][CANJES][UI] observador ejecutado; mounted=$mounted, appState=${_listenedAppState != null}');
+    if (!mounted || _listenedAppState == null) {
+      debugPrint('[DATA][CANJES][UI] observador detenido por mounted/appState');
+      return;
+    }
+    final code = _listenedAppState!.pendingQrCode;
+    debugPrint('[DATA][CANJES][UI] pendingQrCode detectado: $code');
+    if (code == null || code.isEmpty) {
+      debugPrint('[DATA][CANJES][UI] no hay QR pendiente');
+      return;
+    }
+    if (_qrDialogScheduled) {
+      debugPrint('[DATA][CANJES][UI] ya existe un QR programado; se evita duplicado');
+      return;
+    }
+    debugPrint('[DATA][CANJES][UI] QR pendiente detectado por estado: $code');
+    _qrDialogScheduled = true;
+    debugPrint('[DATA][CANJES][UI] programando addPostFrameCallback');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('[DATA][CANJES][UI] addPostFrameCallback ejecutado');
+      debugPrint('[DATA][CANJES][UI] mounted dentro del callback: $mounted');
+      if (!mounted) {
+        debugPrint('[DATA][CANJES][UI] Se cancela: UserDashboard desmontado');
+        _qrDialogScheduled = false;
+        return;
+      }
+      final consumedCode = _listenedAppState?.consumePendingQrCode();
+      debugPrint('[DATA][CANJES][UI] QR consumido: $consumedCode');
+      if (consumedCode == null || consumedCode.isEmpty) {
+        debugPrint('[DATA][CANJES][UI] se cancela: QR consumido vacío');
+        _qrDialogScheduled = false;
+        return;
+      }
+      debugPrint('[DATA][CANJES][UI] abriendo QR con: $consumedCode');
+      _showGeneratedQrDialog(context, consumedCode);
+      debugPrint('[DATA][CANJES][UI] llamada a _showGeneratedQrDialog completada');
+      _qrDialogScheduled = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,9 +88,7 @@ class UserDashboardScreen extends StatelessWidget {
 
     if (user == null) {
       return const Scaffold(
-        body: Center(
-          child: Text('Cargando información del usuario...'),
-        ),
+        body: Center(child: Text('Cargando información del usuario...')),
       );
     }
 
@@ -36,7 +104,8 @@ class UserDashboardScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => await Future.delayed(const Duration(milliseconds: 800)),
+          onRefresh: () async =>
+              await Future.delayed(const Duration(milliseconds: 800)),
           color: AppTheme.jadeGreen,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -53,7 +122,10 @@ class UserDashboardScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Hola, ${user.name} 👋',
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         Text(
                           '¡Qué película veremos hoy!',
@@ -68,19 +140,24 @@ class UserDashboardScreen extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: Icon(
-                            appState.themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                            appState.themeMode == ThemeMode.dark
+                                ? Icons.light_mode_outlined
+                                : Icons.dark_mode_outlined,
                             color: colorScheme.primary,
                           ),
                           onPressed: () => appState.toggleTheme(),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.logout_outlined, color: Colors.redAccent),
+                          icon: const Icon(
+                            Icons.logout_outlined,
+                            color: Colors.redAccent,
+                          ),
                           onPressed: () {
                             appState.logout();
                           },
                         ),
                       ],
-                    )
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -110,13 +187,21 @@ class UserDashboardScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     user.name,
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.jadeGreen.withValues(alpha: 0.15),
+                                      color: AppTheme.jadeGreen.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
@@ -137,7 +222,11 @@ class UserDashboardScreen extends StatelessWidget {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.stars, color: AppTheme.goldAccent, size: 24),
+                                    const Icon(
+                                      Icons.stars,
+                                      color: AppTheme.goldAccent,
+                                      size: 24,
+                                    ),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${user.points}',
@@ -151,7 +240,10 @@ class UserDashboardScreen extends StatelessWidget {
                                 ),
                                 const Text(
                                   'Puntos Totales',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ],
                             ),
@@ -170,7 +262,9 @@ class UserDashboardScreen extends StatelessWidget {
                                   'Progreso de nivel',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: colorScheme.onSurface.withValues(alpha: 0.7),
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.7,
+                                    ),
                                   ),
                                 ),
                                 Text(
@@ -189,10 +283,13 @@ class UserDashboardScreen extends StatelessWidget {
                               child: LinearProgressIndicator(
                                 value: levelProgress,
                                 minHeight: 8,
-                                backgroundColor: colorScheme.brightness == Brightness.dark
+                                backgroundColor:
+                                    colorScheme.brightness == Brightness.dark
                                     ? Colors.grey.shade800
                                     : Colors.grey.shade300,
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.jadeGreen),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppTheme.jadeGreen,
+                                ),
                               ),
                             ),
                           ],
@@ -220,7 +317,7 @@ class UserDashboardScreen extends StatelessWidget {
                       icon: Icons.qr_code_scanner,
                       label: 'Escanear',
                       color: Colors.blueAccent,
-                      onTap: () => onTabChange(3), // QR Scanner Tab
+                      onTap: () => widget.onTabChange(3), // QR Scanner Tab
                     ),
                     _buildQuickAction(
                       icon: Icons.card_giftcard,
@@ -235,13 +332,19 @@ class UserDashboardScreen extends StatelessWidget {
                       icon: Icons.movie_outlined,
                       label: 'Tracker',
                       color: AppTheme.jadeGreen,
-                      onTap: () => onTabChange(0), // Tracker Tab
+                      onTap: () => widget.onTabChange(0), // Tracker Tab
                     ),
                     _buildQuickAction(
                       icon: Icons.map_outlined,
                       label: 'Cines',
                       color: Colors.purpleAccent,
-                      onTap: () => onTabChange(1), // Map Tab
+                      onTap: () => widget.onTabChange(1), // Map Tab
+                    ),
+                    _buildQuickAction(
+                      icon: Icons.qr_code_2,
+                      label: 'Mis QR',
+                      color: AppTheme.goldAccent,
+                      onTap: () => _showQrHistoryDialog(context, appState),
                     ),
                   ],
                 ),
@@ -253,10 +356,14 @@ class UserDashboardScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Recompensas Destacadas',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     TextButton(
-                      onPressed: () => _showRewardsListDialog(context, appState),
+                      onPressed: () =>
+                          _showRewardsListDialog(context, appState),
                       child: const Text('Ver todas'),
                     ),
                   ],
@@ -266,7 +373,9 @@ class UserDashboardScreen extends StatelessWidget {
                   height: 180,
                   child: appState.rewards.isEmpty
                       ? const Center(
-                          child: Text('No hay recompensas disponibles por ahora.'),
+                          child: Text(
+                            'No hay recompensas disponibles por ahora.',
+                          ),
                         )
                       : ListView.builder(
                           scrollDirection: Axis.horizontal,
@@ -275,10 +384,17 @@ class UserDashboardScreen extends StatelessWidget {
                             final reward = appState.rewards[index];
                             return Container(
                               width: 170,
-                              margin: const EdgeInsets.only(right: 12, bottom: 8),
+                              margin: const EdgeInsets.only(
+                                right: 12,
+                                bottom: 8,
+                              ),
                               child: RewardCard(
                                 reward: reward,
-                                onTap: () => _showRedeemDialog(context, reward, appState),
+                                onTap: () => _showRedeemDialog(
+                                  context,
+                                  reward,
+                                  appState,
+                                ),
                               ),
                             );
                           },
@@ -327,12 +443,17 @@ class UserDashboardScreen extends StatelessWidget {
                               ),
                               child: Icon(
                                 isSuccess ? Icons.qr_code : Icons.qr_code_2,
-                                color: isSuccess ? AppTheme.jadeGreen : Colors.redAccent,
+                                color: isSuccess
+                                    ? AppTheme.jadeGreen
+                                    : Colors.redAccent,
                               ),
                             ),
                             title: Text(
                               scan.place,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
                             subtitle: Text(
                               scan.date,
@@ -345,7 +466,9 @@ class UserDashboardScreen extends StatelessWidget {
                                 Text(
                                   isSuccess ? '+${scan.points} pts' : '0 pts',
                                   style: TextStyle(
-                                    color: isSuccess ? AppTheme.jadeGreen : Colors.redAccent,
+                                    color: isSuccess
+                                        ? AppTheme.jadeGreen
+                                        : Colors.redAccent,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -353,7 +476,9 @@ class UserDashboardScreen extends StatelessWidget {
                                 Text(
                                   scan.status,
                                   style: TextStyle(
-                                    color: isSuccess ? AppTheme.jadeGreen : Colors.redAccent,
+                                    color: isSuccess
+                                        ? AppTheme.jadeGreen
+                                        : Colors.redAccent,
                                     fontSize: 10,
                                   ),
                                 ),
@@ -404,13 +529,18 @@ class UserDashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showRedeemDialog(BuildContext context, Reward reward, AppState appState) {
+  void _showRedeemDialog(
+    BuildContext context,
+    Reward reward,
+    AppState appState,
+  ) {
     if (appState.currentUser == null) return;
-    final hasEnoughPoints = appState.currentUser!.points >= reward.pointsRequired;
+    final hasEnoughPoints =
+        appState.currentUser!.points >= reward.pointsRequired;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(reward.name),
         content: Column(
@@ -441,7 +571,10 @@ class UserDashboardScreen extends StatelessWidget {
                 const Text('Puntos necesarios:'),
                 Text(
                   '${reward.pointsRequired} pts',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.goldAccent,
+                  ),
                 ),
               ],
             ),
@@ -454,7 +587,9 @@ class UserDashboardScreen extends StatelessWidget {
                   '${appState.currentUser!.points} pts',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: hasEnoughPoints ? AppTheme.jadeGreen : Colors.redAccent,
+                    color: hasEnoughPoints
+                        ? AppTheme.jadeGreen
+                        : Colors.redAccent,
                   ),
                 ),
               ],
@@ -468,26 +603,124 @@ class UserDashboardScreen extends StatelessWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: hasEnoughPoints ? AppTheme.jadeGreen : Colors.grey,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              backgroundColor: hasEnoughPoints
+                  ? AppTheme.jadeGreen
+                  : Colors.grey,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            onPressed: hasEnoughPoints && reward.stock > 0
+            onPressed: hasEnoughPoints && (reward.stock == null || reward.stock! > 0)
                 ? () {
-                    final int updatedPoints = (appState.currentUser!.points - reward.pointsRequired).toInt();
-                    final int updatedLevel = (updatedPoints ~/ 500) + 1;
-                    appState.saveUser(appState.currentUser!.copyWith(
-                      points: updatedPoints,
-                      level: updatedLevel,
-                    ));
-                    appState.saveReward(reward.copyWith(stock: reward.stock - 1));
-                    Navigator.pop(context);
-                    showAppSnackbar(
-                      context,
-                      message: '¡Recompensa "${reward.name}" canjeada con éxito! Revisa tu correo.',
-                    );
+                    debugPrint('[DATA][CANJES][UI] Cerrando confirmación antes de iniciar canje');
+                    Navigator.pop(dialogContext);
+                    _completeRedeemFromScreen(reward, appState);
                   }
                 : null,
             child: const Text('Canjear'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _completeRedeemFromScreen(
+    Reward reward,
+    AppState appState,
+  ) async {
+    final success = await appState.redeemReward(reward);
+    debugPrint('[DATA][CANJES][UI] success: $success');
+    debugPrint('[DATA][CANJES][UI] lastQrCode: ${appState.lastQrCode}');
+    if (!success) {
+      debugPrint('[DATA][CANJES][UI] Canje fallido; no hay QR pendiente');
+      return;
+    }
+    debugPrint('[DATA][CANJES][UI] Canje exitoso; QR pendiente delegado a AppState');
+  }
+
+  void _showGeneratedQrDialog(BuildContext context, String code) {
+    debugPrint('[DATA][CANJES][QR_DIALOG] _showGeneratedQrDialog ejecutado');
+    debugPrint('[DATA][CANJES][QR_DIALOG] code recibido: $code');
+    debugPrint('[DATA][CANJES][QR_DIALOG] ejecutando showDialog');
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        debugPrint('[DATA][CANJES][QR_DIALOG] builder ejecutado');
+        return Dialog(
+          child: SizedBox(
+            width: 280,
+            height: 380,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const Text(
+                      '¡Canje realizado!',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Builder(
+                      builder: (context) {
+                        debugPrint('[DATA][CANJES][QR_DIALOG] construyendo QrImageView con: $code');
+                        return QrImageView(data: code, size: 220);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(code, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cerrar'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showQrHistoryDialog(
+    BuildContext context,
+    AppState appState,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mis códigos QR'),
+        content: SizedBox(
+          width: 360,
+          child: appState.userQrCodes.isEmpty
+              ? const Text('Todavía no tienes códigos QR generados.')
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: appState.userQrCodes.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final qr = appState.userQrCodes[index];
+                    final code = qr['codigo']?.toString() ?? '';
+                    return ListTile(
+                      leading: QrImageView(data: code, size: 48),
+                      title: Text(code),
+                      subtitle: Text(qr['estado']?.toString() ?? ''),
+                      onTap: code.isEmpty
+                          ? null
+                          : () {
+                              Navigator.pop(context);
+                              _showGeneratedQrDialog(context, code);
+                            },
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
           ),
         ],
       ),

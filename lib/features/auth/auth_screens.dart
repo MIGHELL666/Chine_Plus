@@ -14,7 +14,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -27,13 +28,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 1500),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     _controller.forward();
 
@@ -81,10 +84,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 // Title
                 RichText(
                   text: const TextSpan(
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
                     children: [
-                      TextSpan(text: 'CHINE', style: TextStyle(color: Colors.white)),
-                      TextSpan(text: ' PLUS', style: TextStyle(color: AppTheme.jadeGreen)),
+                      TextSpan(
+                        text: 'CHINE',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      TextSpan(
+                        text: ' PLUS',
+                        style: TextStyle(color: AppTheme.jadeGreen),
+                      ),
                     ],
                   ),
                 ),
@@ -140,7 +153,9 @@ class WelcomeScreen extends StatelessWidget {
               width: 300,
               height: 300,
               decoration: BoxDecoration(
-                color: AppTheme.jadeGreen.withValues(alpha: isDark ? 0.08 : 0.05),
+                color: AppTheme.jadeGreen.withValues(
+                  alpha: isDark ? 0.08 : 0.05,
+                ),
                 shape: BoxShape.circle,
               ),
             ),
@@ -148,7 +163,10 @@ class WelcomeScreen extends StatelessWidget {
           // Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16.0,
+              ),
               child: Column(
                 children: [
                   const Spacer(),
@@ -168,10 +186,7 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   const Text(
                     '¡Bienvenido a Chine Plus!',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -218,8 +233,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'miguel@chineplus.com');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   String _selectedRole = 'user'; // 'user' or 'admin'
   bool _isLoading = false;
 
@@ -230,20 +245,24 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       // Simulating network delay
-      Future.delayed(const Duration(milliseconds: 1000), () {
+      Future.delayed(const Duration(milliseconds: 1000), () async {
         if (!mounted) return;
         final appState = Provider.of<AppState>(context, listen: false);
-        final success = appState.login(
+        final success = await appState.loginWithSupabase(
           _emailController.text,
           _passwordController.text,
           _selectedRole,
         );
+        if (!mounted) return;
 
         setState(() {
           _isLoading = false;
         });
 
         if (success) {
+          debugPrint(
+            '[AUTH][7] navegación posterior a /${_selectedRole == 'admin' ? 'admin' : 'user'}',
+          );
           showAppSnackbar(context, message: '¡Sesión iniciada con éxito!');
           if (_selectedRole == 'admin') {
             context.go('/admin');
@@ -253,7 +272,8 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           showAppSnackbar(
             context,
-            message: 'Credenciales incorrectas o usuario inactivo.',
+            message:
+                appState.authError ?? 'Error de autenticación desconocido.',
             isError: true,
           );
         }
@@ -292,13 +312,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.jadeGreen,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () {
               Navigator.pop(context);
               showAppSnackbar(
                 context,
-                message: 'Se ha enviado un enlace de recuperación a ${emailController.text}',
+                message:
+                    'Se ha enviado un enlace de recuperación a ${emailController.text}',
               );
             },
             child: const Text('Enviar'),
@@ -363,7 +386,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Icons.person_outline,
                             color: _selectedRole == 'user'
                                 ? Colors.white
-                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                : theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
                             size: 18,
                           ),
                           label: Center(
@@ -373,7 +398,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: _selectedRole == 'user'
                                     ? Colors.white
-                                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                    : theme.colorScheme.onSurface.withValues(
+                                        alpha: 0.6,
+                                      ),
                               ),
                             ),
                           ),
@@ -381,12 +408,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           selectedColor: AppTheme.jadeGreen,
                           backgroundColor: Colors.transparent,
                           side: BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           onSelected: (val) {
                             if (val) {
                               setState(() {
                                 _selectedRole = 'user';
-                                _emailController.text = 'miguel@chineplus.com';
+                                _emailController.clear();
                               });
                             }
                           },
@@ -399,7 +428,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Icons.admin_panel_settings_outlined,
                             color: _selectedRole == 'admin'
                                 ? Colors.white
-                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                : theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
                             size: 18,
                           ),
                           label: Center(
@@ -409,7 +440,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: _selectedRole == 'admin'
                                     ? Colors.white
-                                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                    : theme.colorScheme.onSurface.withValues(
+                                        alpha: 0.6,
+                                      ),
                               ),
                             ),
                           ),
@@ -417,12 +450,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           selectedColor: AppTheme.jadeGreen,
                           backgroundColor: Colors.transparent,
                           side: BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           onSelected: (val) {
                             if (val) {
                               setState(() {
                                 _selectedRole = 'admin';
-                                _emailController.text = 'admin@chineplus.com';
+                                _emailController.clear();
                               });
                             }
                           },
@@ -523,21 +558,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       // Simulating registration delay
-      Future.delayed(const Duration(milliseconds: 1000), () {
+      Future.delayed(const Duration(milliseconds: 1000), () async {
         if (!mounted) return;
         final appState = Provider.of<AppState>(context, listen: false);
-        appState.register(
+        final success = await appState.registerWithSupabase(
           _nameController.text,
           _emailController.text,
           _passwordController.text,
         );
+        if (!mounted) return;
 
         setState(() {
           _isLoading = false;
         });
 
-        showAppSnackbar(context, message: '¡Cuenta creada con éxito! Bienvenido.');
-        context.go('/user');
+        if (success) {
+          debugPrint('[AUTH][7] navegación posterior a /user');
+          showAppSnackbar(
+            context,
+            message: '¡Cuenta creada con éxito! Bienvenido.',
+          );
+          context.go('/user');
+        } else {
+          showAppSnackbar(
+            context,
+            message: appState.authError ?? 'Error de registro desconocido.',
+          );
+        }
       });
     }
   }
@@ -639,7 +686,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Text(
                       '¿Ya tienes una cuenta? ',
-                      style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
                     ),
                     TextButton(
                       onPressed: () => context.pop(),

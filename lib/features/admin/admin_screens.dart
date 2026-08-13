@@ -19,7 +19,8 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     'Panel de Control',
     'Gestión de Usuarios',
     'Premios Canjeables',
-    'Generador de Códigos QR',
+    'Catálogo de Películas',
+    'Catálogo de Cines',
   ];
 
   @override
@@ -33,7 +34,8 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
       _AdminDashboardSection(appState: appState),
       _AdminUsersSection(appState: appState),
       _AdminRewardsSection(appState: appState),
-      _AdminQRMgmtSection(appState: appState),
+      _AdminMoviesSection(appState: appState),
+      _AdminCinemasSection(appState: appState),
     ];
 
     Widget buildDrawer() {
@@ -87,6 +89,21 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.movie_outlined),
+              title: Text(_titles[3]),
+              selected: _selectedIndex == 3,
+              selectedColor: AppTheme.jadeGreen,
+              onTap: () {
+                setState(() => _selectedIndex = 3);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.local_movies_outlined),
+              title: Text(_titles[4]), selected: _selectedIndex == 4,
+              onTap: () { setState(() => _selectedIndex = 4); Navigator.pop(context); },
+            ),
+            ListTile(
               leading: const Icon(Icons.people_outline),
               title: Text(_titles[1]),
               selected: _selectedIndex == 1,
@@ -103,16 +120,6 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               selectedColor: AppTheme.jadeGreen,
               onTap: () {
                 setState(() => _selectedIndex = 2);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.qr_code_outlined),
-              title: Text(_titles[3]),
-              selected: _selectedIndex == 3,
-              selectedColor: AppTheme.jadeGreen,
-              onTap: () {
-                setState(() => _selectedIndex = 3);
                 Navigator.pop(context);
               },
             ),
@@ -183,9 +190,14 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                   label: Text(_titles[2]),
                 ),
                 NavigationRailDestination(
-                  icon: const Icon(Icons.qr_code_outlined),
-                  selectedIcon: const Icon(Icons.qr_code),
+                  icon: const Icon(Icons.movie_outlined),
+                  selectedIcon: const Icon(Icons.movie),
                   label: Text(_titles[3]),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.local_movies_outlined),
+                  selectedIcon: const Icon(Icons.local_movies),
+                  label: Text(_titles[4]),
                 ),
               ],
             ),
@@ -211,8 +223,6 @@ class _AdminDashboardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalPoints = appState.scanHistory.fold(0, (sum, scan) => sum + scan.points);
-
     return Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -241,52 +251,26 @@ class _AdminDashboardSection extends StatelessWidget {
                 ),
                 _buildStatMetric(
                   context,
-                  title: 'QR Activos',
-                  value: '${appState.qrCodes.where((q) => q.status == 'Activo').length}',
-                  icon: Icons.qr_code,
+                  title: 'Películas de catálogo',
+                  value: '${appState.adminMovies.length}',
+                  icon: Icons.movie,
                   color: AppTheme.jadeGreen,
                 ),
                 _buildStatMetric(
                   context,
                   title: 'Premios Stock',
-                  value: '${appState.rewards.fold(0, (sum, r) => sum + r.stock)}',
+                  value: '${appState.rewards.fold<int>(0, (sum, r) => sum + (r.stock ?? 0))}',
                   icon: Icons.card_giftcard,
                   color: AppTheme.goldAccent,
                 ),
                 _buildStatMetric(
                   context,
-                  title: 'Puntos Otorgados',
-                  value: '$totalPoints',
-                  icon: Icons.stars_outlined,
+                  title: 'Cines de catálogo',
+                  value: '${appState.adminCinemas.length}',
+                  icon: Icons.local_movies,
                   color: Colors.purpleAccent,
                 ),
               ],
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Actividades Recientes',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: appState.scanHistory.length > 5 ? 5 : appState.scanHistory.length,
-              itemBuilder: (context, index) {
-                final scan = appState.scanHistory[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const Icon(Icons.history_toggle_off, color: AppTheme.jadeGreen),
-                    title: Text('Escaneo registrado en: ${scan.place}'),
-                    subtitle: Text('Fecha: ${scan.date}'),
-                    trailing: Text(
-                      '+${scan.points} pts',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
-                    ),
-                  ),
-                );
-              },
             ),
           ],
         ),
@@ -436,20 +420,25 @@ class _AdminUsersSectionState extends State<_AdminUsersSection> {
                                           isActive ? Icons.toggle_on : Icons.toggle_off,
                                           color: isActive ? AppTheme.jadeGreen : Colors.grey,
                                         ),
-                                        onPressed: () {
+                                        onPressed: () async {
                                           final nextStatus = isActive ? 'Inactivo' : 'Activo';
-                                          widget.appState.updateUserStatus(user.id, nextStatus);
-                                          showAppSnackbar(
-                                            context,
-                                            message: 'Usuario cambiado a estado $nextStatus',
-                                          );
+                                          try {
+                                            await widget.appState.updateUserStatus(user.id, nextStatus);
+                                            if (context.mounted) showAppSnackbar(context, message: 'Usuario cambiado a estado $nextStatus');
+                                          } catch (error) {
+                                            if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase: $error');
+                                          }
                                         },
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                        onPressed: () {
-                                          widget.appState.deleteUser(user.id);
-                                          showAppSnackbar(context, message: 'Usuario eliminado.');
+                                        onPressed: () async {
+                                          try {
+                                            await widget.appState.deleteUser(user.id);
+                                            if (context.mounted) showAppSnackbar(context, message: 'Perfil eliminado de Supabase.');
+                                          } catch (error) {
+                                            if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase: $error');
+                                          }
                                         },
                                       ),
                                     ],
@@ -530,9 +519,17 @@ class _AdminUsersSectionState extends State<_AdminUsersSection> {
                     email: emailController.text,
                     role: selectedRole,
                   );
-                  widget.appState.saveUser(updatedUser);
-                  Navigator.pop(context);
-                  showAppSnackbar(context, message: 'Usuario actualizado correctamente.');
+                  () async {
+                    try {
+                      await widget.appState.saveUser(updatedUser);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        showAppSnackbar(context, message: 'Usuario actualizado correctamente.');
+                      }
+                    } catch (error) {
+                      if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase: $error');
+                    }
+                  }();
                 }
               },
               child: const Text('Guardar'),
@@ -583,9 +580,17 @@ class _AdminRewardsSection extends StatelessWidget {
                   backgroundColor: Colors.black.withValues(alpha: 0.7),
                   child: IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                    onPressed: () {
-                      appState.deleteReward(reward.id);
-                      showAppSnackbar(context, message: 'Recompensa eliminada.');
+                    onPressed: () async {
+                      try {
+                        await appState.deleteReward(reward.id);
+                        if (context.mounted) {
+                          showAppSnackbar(context, message: 'Promoción eliminada.');
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          showAppSnackbar(context, message: 'Error de Supabase: $error');
+                        }
+                      }
                     },
                   ),
                 ),
@@ -603,7 +608,9 @@ class _AdminRewardsSection extends StatelessWidget {
     final descController = TextEditingController(text: reward?.description ?? '');
     final pointsController = TextEditingController(text: reward != null ? '${reward.pointsRequired}' : '300');
     final stockController = TextEditingController(text: reward != null ? '${reward.stock}' : '50');
-    String status = reward?.status ?? 'Activo';
+    String status = reward?.status == 'activa' ? 'Activo' :
+        reward?.status == 'inactiva' ? 'Inactivo' : (reward == null ? 'Activo' : 'Inactivo');
+    final selectedCinemaIds = <String>{...?reward?.cinemaIds};
 
     showDialog(
       context: context,
@@ -670,6 +677,37 @@ class _AdminRewardsSection extends StatelessWidget {
                       }
                     },
                   ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Cines donde aplica',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  if (appState.cinemas.isEmpty)
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('No hay cines disponibles.'),
+                    )
+                  else
+                    ...appState.cinemas.map(
+                      (cinema) => CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(cinema.name),
+                        value: selectedCinemaIds.contains(cinema.id),
+                        onChanged: (checked) {
+                          setDialogState(() {
+                            if (checked == true) {
+                              selectedCinemaIds.add(cinema.id);
+                            } else {
+                              selectedCinemaIds.remove(cinema.id);
+                            }
+                          });
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -687,17 +725,28 @@ class _AdminRewardsSection extends StatelessWidget {
                     id: reward?.id ?? 'REW-${DateTime.now().millisecondsSinceEpoch}',
                     name: nameController.text,
                     description: descController.text,
-                    imageUrl: reward?.imageUrl ?? 'https://images.unsplash.com/photo-1578244182942-18427f3caca6?w=200',
+                    imageUrl: reward?.imageUrl ?? '',
                     pointsRequired: int.parse(pointsController.text),
-                    stock: int.parse(stockController.text),
-                    status: status,
+                    stock: int.tryParse(stockController.text),
+                    status: status.toLowerCase() == 'activo' ? 'activa' : 'inactiva',
+                    cinemaIds: selectedCinemaIds.toList(),
                   );
-                  appState.saveReward(newReward);
-                  Navigator.pop(context);
-                  showAppSnackbar(
-                    context,
-                    message: reward == null ? 'Recompensa creada con éxito.' : 'Recompensa editada con éxito.',
-                  );
+                  () async {
+                    try {
+                      await appState.saveReward(newReward);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        showAppSnackbar(
+                          context,
+                          message: reward == null ? 'Promoción creada con éxito.' : 'Promoción editada con éxito.',
+                        );
+                      }
+                    } catch (error) {
+                      if (context.mounted) {
+                        showAppSnackbar(context, message: 'Error de Supabase: $error');
+                      }
+                    }
+                  }();
                 }
               },
               child: const Text('Guardar'),
@@ -706,6 +755,233 @@ class _AdminRewardsSection extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _AdminMoviesSection extends StatefulWidget {
+  final AppState appState;
+  const _AdminMoviesSection({required this.appState});
+
+  @override
+  State<_AdminMoviesSection> createState() => _AdminMoviesSectionState();
+}
+
+class _AdminMoviesSectionState extends State<_AdminMoviesSection> {
+  String _filter = 'Todas';
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final movies = widget.appState.adminMovies.where((movie) {
+      return _filter == 'Todas' ||
+          (_filter == 'Activas' && movie.status == 'activo') ||
+          (_filter == 'Inactivas' && movie.status == 'inactivo');
+    }).toList();
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppTheme.jadeGreen,
+        onPressed: _busy ? null : () => _showMovieForm(context),
+        child: const Icon(Icons.add),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: DropdownButtonFormField<String>(
+              initialValue: _filter,
+              decoration: const InputDecoration(labelText: 'Filtrar catálogo'),
+              items: ['Todas', 'Activas', 'Inactivas']
+                  .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                  .toList(),
+              onChanged: (value) => setState(() => _filter = value ?? 'Todas'),
+            ),
+          ),
+          Expanded(
+            child: movies.isEmpty
+                ? const Center(child: Text('No hay películas en el catálogo.'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: movies.length,
+                    itemBuilder: (context, index) {
+                      final movie = movies[index];
+                      final active = movie.status == 'activo';
+                      return Card(
+                        child: ListTile(
+                          leading: movie.posterUrl.isEmpty
+                              ? const Icon(Icons.movie)
+                              : Image.network(movie.posterUrl, width: 48, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.movie)),
+                          title: Text(movie.title),
+                          subtitle: Text('${movie.genre.isEmpty ? 'Sin género' : movie.genre} · ${movie.durationMinutes == 0 ? 'Duración no disponible' : '${movie.durationMinutes} min'}'),
+                          trailing: Wrap(
+                            children: [
+                              IconButton(icon: const Icon(Icons.edit), onPressed: _busy ? null : () => _showMovieForm(context, movie)),
+                              IconButton(
+                                icon: Icon(active ? Icons.toggle_on : Icons.toggle_off,
+                                    color: active ? AppTheme.jadeGreen : Colors.grey),
+                                onPressed: _busy ? null : () => _toggleMovie(movie),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleMovie(Movie movie) async {
+    setState(() => _busy = true);
+    try {
+      await widget.appState.actualizarEstadoPeliculaAdmin(movie);
+    } catch (error) {
+      if (mounted) showAppSnackbar(context, message: 'Error de Supabase: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showMovieForm(BuildContext context, [Movie? movie]) {
+    final title = TextEditingController(text: movie?.title ?? '');
+    final poster = TextEditingController(text: movie?.posterUrl ?? '');
+    final genre = TextEditingController(text: movie?.genre ?? '');
+    final duration = TextEditingController(text: movie == null || movie.durationMinutes == 0 ? '' : '${movie.durationMinutes}');
+    final description = TextEditingController(text: movie?.description ?? '');
+    DateTime? releaseDate = movie?.releaseDate;
+    final formKey = GlobalKey<FormState>();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: Text(movie == null ? 'Nueva película' : 'Editar película'),
+        content: SingleChildScrollView(child: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AppTextField(controller: title, labelText: 'Título *', hintText: 'Título de la película', validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null),
+          const SizedBox(height: 10),
+          AppTextField(controller: poster, labelText: 'Poster URL', hintText: 'https://...'),
+          const SizedBox(height: 10),
+          AppTextField(controller: genre, labelText: 'Género', hintText: 'Género'),
+          const SizedBox(height: 10),
+          AppTextField(controller: duration, labelText: 'Duración en minutos', hintText: 'Ej. 120', keyboardType: TextInputType.number,
+            validator: (v) => v != null && v.isNotEmpty && int.tryParse(v) == null ? 'Debe ser numérica' : null),
+          const SizedBox(height: 10),
+          AppTextField(controller: description, labelText: 'Descripción', hintText: 'Descripción', maxLines: 3),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(icon: const Icon(Icons.calendar_today), label: Text(releaseDate == null ? 'Fecha de estreno' : releaseDate!.toIso8601String().split('T').first), onPressed: () async {
+            final picked = await showDatePicker(context: context, firstDate: DateTime(1900), lastDate: DateTime(2100), initialDate: releaseDate ?? DateTime.now());
+            if (picked != null) setDialogState(() => releaseDate = picked);
+          }),
+        ]))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+            final result = Movie(id: movie?.id ?? '', title: title.text, posterUrl: poster.text, watchDate: '', cinemaName: '', rating: 0, genre: genre.text, durationMinutes: int.tryParse(duration.text) ?? 0, description: description.text, releaseDate: releaseDate, status: movie?.status ?? 'activo');
+            try {
+              if (movie == null) {
+                await widget.appState.crearPeliculaAdmin(titulo: result.title, posterUrl: result.posterUrl, genero: result.genre, duracionMinutos: result.durationMinutes == 0 ? null : result.durationMinutes, descripcion: result.description, fechaEstreno: releaseDate);
+              } else {
+                await widget.appState.actualizarPeliculaAdmin(result);
+              }
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            } catch (error) {
+              if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase: $error');
+            }
+          }, child: const Text('Guardar')),
+        ],
+      )),
+    );
+  }
+}
+
+class _AdminCinemasSection extends StatefulWidget {
+  final AppState appState;
+  const _AdminCinemasSection({required this.appState});
+  @override State<_AdminCinemasSection> createState() => _AdminCinemasSectionState();
+}
+
+class _AdminCinemasSectionState extends State<_AdminCinemasSection> {
+  String _filter = 'Todas';
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cinemas = widget.appState.adminCinemas.where((c) => _filter == 'Todas' || (_filter == 'Activos' && c.status == 'activo') || (_filter == 'Inactivos' && c.status == 'inactivo')).toList();
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppTheme.jadeGreen,
+        onPressed: _busy ? null : () => _showCinemaForm(context),
+        child: const Icon(Icons.add),
+      ),
+      body: Column(children: [
+        Padding(padding: const EdgeInsets.all(16), child: DropdownButtonFormField<String>(
+          initialValue: _filter,
+          decoration: const InputDecoration(labelText: 'Filtrar cines'),
+          items: ['Todas', 'Activos', 'Inactivos'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+          onChanged: (v) => setState(() => _filter = v ?? 'Todas'),
+        )),
+        Expanded(child: cinemas.isEmpty
+            ? const Center(child: Text('No hay cines en el catálogo.'))
+            : ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: cinemas.length, itemBuilder: (context, index) {
+                final cinema = cinemas[index];
+                final active = cinema.status == 'activo';
+                return Card(child: ListTile(
+                  leading: const Icon(Icons.local_movies),
+                  title: Text(cinema.name),
+                  subtitle: Text(cinema.address.isEmpty ? cinema.googlePlaceId : cinema.address),
+                  trailing: Wrap(children: [
+                    IconButton(icon: const Icon(Icons.edit), onPressed: _busy ? null : () => _showCinemaForm(context, cinema)),
+                    IconButton(icon: Icon(active ? Icons.toggle_on : Icons.toggle_off, color: active ? AppTheme.jadeGreen : Colors.grey), onPressed: _busy ? null : () => _toggleCinema(cinema)),
+                  ]),
+                ));
+              })),
+      ]),
+    );
+  }
+
+  Future<void> _toggleCinema(Cinema cinema) async {
+    setState(() => _busy = true);
+    try { await widget.appState.actualizarEstadoCineAdmin(cinema); }
+    catch (error) { if (mounted) showAppSnackbar(context, message: 'Error de Supabase: $error'); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  void _showCinemaForm(BuildContext context, [Cinema? cinema]) {
+    final place = TextEditingController(text: cinema?.googlePlaceId ?? '');
+    final name = TextEditingController(text: cinema?.name ?? '');
+    final address = TextEditingController(text: cinema?.address ?? '');
+    final latitude = TextEditingController(text: cinema == null || cinema.latitude == 0 ? '' : '${cinema.latitude}');
+    final longitude = TextEditingController(text: cinema == null || cinema.longitude == 0 ? '' : '${cinema.longitude}');
+    final key = GlobalKey<FormState>();
+    showDialog(context: context, builder: (dialogContext) => AlertDialog(
+      title: Text(cinema == null ? 'Nuevo cine' : 'Editar cine'),
+      content: SingleChildScrollView(child: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        AppTextField(controller: place, labelText: 'Google Place ID *', hintText: 'ID de Google Maps', validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null),
+        const SizedBox(height: 10),
+        AppTextField(controller: name, labelText: 'Nombre *', hintText: 'Nombre del cine', validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null),
+        const SizedBox(height: 10),
+        AppTextField(controller: address, labelText: 'Dirección', hintText: 'Dirección'),
+        const SizedBox(height: 10),
+        AppTextField(controller: latitude, labelText: 'Latitud', hintText: 'Ej. 21.88', keyboardType: TextInputType.numberWithOptions(decimal: true)),
+        const SizedBox(height: 10),
+        AppTextField(controller: longitude, labelText: 'Longitud', hintText: 'Ej. -102.29', keyboardType: TextInputType.numberWithOptions(decimal: true)),
+      ]))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+        ElevatedButton(onPressed: () async {
+          if (!key.currentState!.validate()) return;
+          try {
+            if (cinema == null) {
+              await widget.appState.crearCineAdmin(googlePlaceId: place.text, nombre: name.text, direccion: address.text, latitud: double.tryParse(latitude.text), longitud: double.tryParse(longitude.text));
+            } else {
+              await widget.appState.actualizarCineAdmin(Cinema(id: cinema.id, googlePlaceId: place.text, name: name.text, address: address.text, schedule: '', distance: '', latitude: double.tryParse(latitude.text) ?? 0, longitude: double.tryParse(longitude.text) ?? 0, status: cinema.status));
+            }
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+          } catch (error) { if (context.mounted) showAppSnackbar(context, message: 'Error de Supabase: $error'); }
+        }, child: const Text('Guardar')),
+      ],
+    ));
   }
 }
 
