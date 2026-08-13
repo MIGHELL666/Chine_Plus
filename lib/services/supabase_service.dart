@@ -412,8 +412,12 @@ class SupabaseService {
         'p_cine_id': cineId,
       },
     );
+    debugPrint('[DATA][QR][RPC] Resultado: $result');
     if (result is Map<String, dynamic>) return result;
     if (result is Map) return Map<String, dynamic>.from(result);
+    if (result is List && result.isNotEmpty && result.first is Map) {
+      return Map<String, dynamic>.from(result.first as Map);
+    }
     throw const PostgrestException(
       message: 'La RPC no devolvió el saldo actualizado',
     );
@@ -452,22 +456,25 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> obtenerCodigosQr(String usuarioId) async {
     final rows = await _supabase
         .from('canjes')
-        .select(
-          'id,usuario_id,codigos_qr(id,codigo,estado,fecha_generacion,fecha_uso)',
-        )
+        .select('id,usuario_id')
         .eq('usuario_id', usuarioId)
         .order('fecha_canje', ascending: false);
-    final qrCodes = <Map<String, dynamic>>[];
-    for (final row in rows) {
-      final qr = row['codigos_qr'];
-      if (qr is Map) {
-        qrCodes.add(Map<String, dynamic>.from(qr));
-      } else if (qr is List) {
-        for (final item in qr) {
-          if (item is Map) qrCodes.add(Map<String, dynamic>.from(item));
-        }
-      }
-    }
+    final canjeIds = rows
+        .map((row) => row['id']?.toString())
+        .whereType<String>()
+        .toList();
+    if (canjeIds.isEmpty) return [];
+
+    // Se consulta explícitamente la tabla para incluir QR activos, utilizados,
+    // expirados o cancelados. No se filtra por estado: todos pertenecen al
+    // historial de canjes del usuario autenticado.
+    final qrRows = await _supabase
+        .from('codigos_qr')
+        .select('id,canje_id,codigo,estado,fecha_generacion,fecha_uso')
+        .inFilter('canje_id', canjeIds);
+    final qrCodes = qrRows
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
     debugPrint('[DATA][QR] códigos encontrados para $usuarioId: ${qrCodes.length}');
     return qrCodes;
   }

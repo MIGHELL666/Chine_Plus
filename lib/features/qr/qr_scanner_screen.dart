@@ -19,6 +19,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
   bool _processing = false;
   bool _cameraOpen = false;
   String? _scanError;
+  String _scanStatus = 'Selecciona un cine para comenzar.';
+  String? _lastScannedCode;
 
   @override
   void initState() {
@@ -48,28 +50,38 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
         .whereType<String>()
         .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
     if (codigo.isEmpty) return;
+    debugPrint('[DATA][QR][SCANNER] Código detectado: ${codigo.trim()}');
     setState(() {
       _processing = true;
       _scanError = null;
+      _scanStatus = 'QR detectado. Validando con Supabase...';
+      _lastScannedCode = codigo.trim();
     });
     try {
       final result = await appState.registrarUsoQr(
         codigo: codigo.trim(),
         cineId: _selectedCinemaId!,
       );
+      debugPrint('[DATA][QR][SCANNER] RPC aceptada: $result');
       if (!mounted) return;
       final points = result['puntos_obtenidos'] ?? result['puntos'] ?? 50;
       final balance = result['saldo_actual'] ?? result['nuevo_saldo'] ?? result['saldo'] ?? appState.currentUser?.points;
-      setState(() => _cameraOpen = false);
+      setState(() {
+        _cameraOpen = false;
+        _processing = false;
+        _scanStatus = 'Escaneo exitoso. QR registrado.';
+      });
       showAppSnackbar(
         context,
         message: 'QR registrado: +$points puntos. Saldo: $balance puntos.',
       );
     } catch (error) {
+      debugPrint('[DATA][QR][SCANNER][ERROR] $error');
       if (!mounted) return;
       setState(() {
         _scanError = error.toString();
         _processing = false;
+        _scanStatus = 'El QR fue rechazado.';
       });
       showAppSnackbar(context, message: _scanError!, isError: true);
     }
@@ -113,8 +125,28 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                           _selectedCinemaId = value;
                           _cameraOpen = false;
                           _scanError = null;
+                          _scanStatus = value == null ? 'Selecciona un cine para comenzar.' : 'Cine seleccionado. Pulsa Escanear Código QR.';
+                          _lastScannedCode = null;
                         }),
               ),
+              const SizedBox(height: 16),
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (_scanError == null ? AppTheme.jadeGreen : Colors.redAccent).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  Icon(_processing ? Icons.sync : (_scanError == null ? Icons.info_outline : Icons.error_outline)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_scanStatus)),
+                ]),
+              ),
+              if (_lastScannedCode != null) ...[
+                const SizedBox(height: 8),
+                Text('Código leído: $_lastScannedCode', maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
               const SizedBox(height: 16),
 
               // Viewfinder camera simulator box
@@ -233,6 +265,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> with SingleTickerProv
                   setState(() {
                           _cameraOpen = true;
                           _scanError = null;
+                          _scanStatus = 'Apunta la cámara al código QR...';
+                          _lastScannedCode = null;
                         });
                 },
               ),

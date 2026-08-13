@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/theme.dart';
+import '../qr/qr_codes_screen.dart';
 import '../../shared/models/models.dart';
 import '../../shared/widgets/widgets.dart';
 
@@ -344,7 +345,11 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                       icon: Icons.qr_code_2,
                       label: 'Mis QR',
                       color: AppTheme.goldAccent,
-                      onTap: () => _showQrHistoryDialog(context, appState),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const QrCodesScreen(),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -681,49 +686,6 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _showQrHistoryDialog(
-    BuildContext context,
-    AppState appState,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mis códigos QR'),
-        content: SizedBox(
-          width: 360,
-          child: appState.userQrCodes.isEmpty
-              ? const Text('Todavía no tienes códigos QR generados.')
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: appState.userQrCodes.length,
-                  separatorBuilder: (_, __) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final qr = appState.userQrCodes[index];
-                    final code = qr['codigo']?.toString() ?? '';
-                    return ListTile(
-                      leading: QrImageView(data: code, size: 48),
-                      title: Text(code),
-                      subtitle: Text(qr['estado']?.toString() ?? ''),
-                      onTap: code.isEmpty
-                          ? null
-                          : () {
-                              Navigator.pop(context);
-                              _showGeneratedQrDialog(context, code);
-                            },
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
     );
   }
 

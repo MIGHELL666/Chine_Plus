@@ -471,6 +471,9 @@ class AppState extends ChangeNotifier {
         return false;
       }
       _currentUser = user;
+      // The initial catalog load can happen before Auth restores the session.
+      // Reload it after login so authenticated users receive the real cinemas.
+      await _loadCatalogs();
       await _loadWatchedMovies();
       await _loadFavorites();
       await _loadUserQrCodes();
@@ -583,6 +586,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Recarga los códigos QR reales del usuario desde Supabase.
+  Future<void> cargarMisQr() => _loadUserQrCodes();
+
   void register(String name, String email, String password) {
     debugPrint('[AUTH] register() legacy ignorado: usa Supabase Auth.');
   }
@@ -694,6 +700,16 @@ class AppState extends ChangeNotifier {
       final refreshedProfile = await _service.obtenerPerfil(userId);
       if (refreshedProfile != null) _currentUser = refreshedProfile;
     }
+    final points = (result['puntos_obtenidos'] ?? result['puntos'] ?? 50) as num;
+    final cinema = _cinemas.where((c) => c.id == cineId).map((c) => c.name).firstOrNull ?? cineId;
+    _scanHistory.insert(0, ScanHistory(
+      id: result['uso_qr_id']?.toString() ?? result['id']?.toString() ?? codigo,
+      userId: userId ?? '',
+      date: DateTime.now().toLocal().toString(),
+      place: cinema,
+      points: points.toInt(),
+      status: 'Completado',
+    ));
     notifyListeners();
     return result;
   }
